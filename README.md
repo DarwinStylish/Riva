@@ -1,5 +1,16 @@
 # Riva
 
-Deterministic Unreal Engine performance diagnostics companion for Unreal Insights.
+Riva is a deterministic performance diagnostics companion for Unreal Insights.
 
-Riva analyzes Unreal trace data, detects performance spikes, and produces evidence-backed findings with Unreal-native next steps.
+## Rules
+
+- Pure C++20 core
+- No Unreal headers in include/riva
+- No manual .utrace parsing
+- Deterministic analysis only
+
+## Build
+
+cmake -S . -B build
+cmake --build build -j
+ctest --test-dir build --output-on-failure
