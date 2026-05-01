@@ -13,6 +13,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 
 add_library(riva_core
+  src/normalized_trace.cpp
+  src/spike_detector.cpp
   src/version.cpp
 )
 
@@ -39,14 +41,25 @@ target_link_libraries(riva
 if(RIVA_BUILD_TESTS)
   enable_testing()
 
-  add_executable(riva_tests
+  add_executable(riva_smoke_tests
     tests/smoke_test.cpp
   )
 
-  target_link_libraries(riva_tests
+  target_link_libraries(riva_smoke_tests
     PRIVATE
       riva_core
   )
 
-  add_test(NAME riva_smoke_tests COMMAND riva_tests)
+  add_test(NAME riva_smoke_tests COMMAND riva_smoke_tests)
+
+  add_executable(riva_core_engine_tests
+    tests/core_engine_test.cpp
+  )
+
+  target_link_libraries(riva_core_engine_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_core_engine_tests COMMAND riva_core_engine_tests)
 endif()
