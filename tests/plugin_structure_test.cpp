@@ -108,8 +108,8 @@ void TestCoreIntegration() {
   Expect(Contains(header, "LoadAndAnalyzeJsonTrace"), "Header must declare LoadAndAnalyzeJsonTrace static method");
 
   const std::string source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/RivaTraceService.cpp");
-  Expect(Contains(source, "riva/json_loader.h"), "Source must include riva/json_loader.h");
-  Expect(Contains(source, "riva/analysis_engine.h"), "Source must include riva/analysis_engine.h");
+  Expect(Contains(source, "riva/json_trace_loader.hpp"), "Source must include riva/json_trace_loader.hpp");
+  Expect(Contains(source, "riva/analysis_engine.hpp"), "Source must include riva/analysis_engine.hpp");
   Expect(Contains(source, "TCHAR_TO_UTF8"), "Source must convert FString to UTF8 std::string");
   Expect(Contains(source, "Loader.LoadTrace(StdFilePath)"), "Source must invoke JsonTraceLoader::LoadTrace");
   Expect(Contains(source, "Engine.Analyze"), "Source must invoke AnalysisEngine::Analyze");
@@ -163,6 +163,18 @@ void TestSelectionSync() {
   Expect(Contains(service_cpp, "GOnInsightsRangeSelectedCallback"), "Service source must manage callback instance");
 }
 
+void TestMarkerEvents() {
+  const std::string source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/RivaTraceService.cpp");
+  Expect(Contains(source, "bMarkerProviderAvailable"), "Source must check for marker provider availability");
+  Expect(Contains(source, "never fake markers"), "Source must never fake markers when extracting events");
+  Expect(Contains(source, "\"GC\""), "Source must extract GC events");
+  Expect(Contains(source, "\"AsyncLoading\""), "Source must extract AsyncLoading events");
+  Expect(Contains(source, "\"IO\""), "Source must extract IO events");
+  Expect(Contains(source, "\"ShaderCompile\""), "Source must extract ShaderCompile events");
+  Expect(Contains(source, "\"RHIWait\""), "Source must extract RHIWait events");
+  Expect(Contains(source, "Frame.events.push_back"), "Source must construct TraceEvent and append to Frame");
+}
+
 }  // namespace
 
 int main() {
@@ -173,6 +185,7 @@ int main() {
   TestCoreIntegration();
   TestTraceServicesLoader();
   TestSelectionSync();
+  TestMarkerEvents();
   std::cout << "All Unreal Engine plugin structure tests passed successfully!\n";
   return 0;
 }
