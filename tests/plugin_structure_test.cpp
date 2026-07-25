@@ -78,11 +78,28 @@ void TestSlateWidget() {
   Expect(Contains(header, "class SRivaPanel : public SCompoundWidget"),
          "Header must declare SRivaPanel inheriting SCompoundWidget");
   Expect(Contains(header, "SLATE_BEGIN_ARGS(SRivaPanel)"), "Header must use Slate arguments macro");
+  Expect(Contains(header, "struct FRivaUiFinding"), "Header must declare FRivaUiFinding item struct");
+  Expect(Contains(header, "SListView"), "Header must declare SListView member for findings");
+  Expect(Contains(header, "OnGenerateFindingRow"), "Header must declare OnGenerateFindingRow callback");
+  Expect(Contains(header, "OnFindingSelectionChanged"), "Header must declare OnFindingSelectionChanged callback");
+  Expect(Contains(header, "OnOpenTraceClicked"), "Header must declare OnOpenTraceClicked callback");
+  Expect(Contains(header, "OnAnalyzeClicked"), "Header must declare OnAnalyzeClicked callback");
+  Expect(Contains(header, "OnExportMarkdownClicked"), "Header must declare OnExportMarkdownClicked callback");
+  Expect(Contains(header, "OnExportJsonClicked"), "Header must declare OnExportJsonClicked callback");
 
   const std::string source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
   Expect(Contains(source, "DEFINE_LOG_CATEGORY_STATIC(LogRivaEditor"), "Source must define LogRivaEditor category");
   Expect(Contains(source, "LOCTEXT_NAMESPACE \"SRivaPanel\""), "Source must set localization namespace");
-  Expect(Contains(source, "Riva Deterministic Performance Diagnostics"), "Source must render panel header");
+  Expect(Contains(source, "SSplitter"), "Source must construct SSplitter for split view");
+  Expect(Contains(source, "Orient_Horizontal"), "Splitter must be oriented horizontally");
+  Expect(Contains(source, "SScrollBox"), "Source must construct SScrollBox for details pane");
+  Expect(Contains(source, "Open Trace..."), "Source must render Open Trace toolbar button");
+  Expect(Contains(source, "Analyze"), "Source must render Analyze toolbar button");
+  Expect(Contains(source, "Export Markdown..."), "Source must render Export Markdown toolbar button");
+  Expect(Contains(source, "Export JSON..."), "Source must render Export JSON toolbar button");
+  Expect(Contains(source, "Detected Hitches & Stalls"), "Source must render findings list header");
+  Expect(Contains(source, "Diagnostic Evidence & Actionable Guidance"), "Source must render details pane header");
+  Expect(Contains(source, "Status: Ready for trace analysis"), "Source must render status bar ready state");
 }
 
 }  // namespace
