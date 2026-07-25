@@ -23,6 +23,8 @@ public:
 
     void Construct(const FArguments& InArgs);
 
+    void OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FString& ErrorMessage);
+
 private:
     TSharedRef<ITableRow> OnGenerateFindingRow(TSharedPtr<FRivaUiFinding> InItem, const TSharedRef<STableViewBase>& OwnerTable);
     void OnFindingSelectionChanged(TSharedPtr<FRivaUiFinding> InItem, ESelectInfo::Type SelectInfo);
@@ -33,10 +35,13 @@ private:
     FReply OnExportJsonClicked();
 
     void PopulateInitialState();
+    void RunAsyncAnalysis(const FString& TracePath);
 
     TArray<TSharedPtr<FRivaUiFinding>> FindingsList;
     TSharedPtr<SListView<TSharedPtr<FRivaUiFinding>>> FindingsListView;
     TSharedPtr<class STextBlock> DetailsTitleText;
     TSharedPtr<class STextBlock> DetailsContentText;
     TSharedPtr<class STextBlock> StatusBarText;
+
+    int32 CurrentSampleIndex;
 };
