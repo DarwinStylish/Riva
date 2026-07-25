@@ -39,7 +39,8 @@ public class RivaEditor : ModuleRules
                 "AppFramework",
                 "TraceServices",
                 "TraceLog",
-                "TraceAnalysis"
+                "TraceAnalysis",
+                "DesktopPlatform"
             }
         );
     }

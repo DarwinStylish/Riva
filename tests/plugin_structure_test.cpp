@@ -175,6 +175,25 @@ void TestMarkerEvents() {
   Expect(Contains(source, "Frame.events.push_back"), "Source must construct TraceEvent and append to Frame");
 }
 
+void TestExportActions() {
+  const std::string build_cs = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/RivaEditor.Build.cs");
+  Expect(Contains(build_cs, "\"DesktopPlatform\""), "Build rules must depend on DesktopPlatform");
+
+  const std::string panel_source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
+  Expect(Contains(panel_source, "FDesktopPlatformModule::Get()"), "Panel source must get DesktopPlatform");
+  Expect(Contains(panel_source, "DesktopPlatform->SaveFileDialog"), "Panel source must invoke SaveFileDialog");
+  Expect(Contains(panel_source, "ExportLastAnalysisToMarkdown"), "Panel source must call ExportLastAnalysisToMarkdown");
+  Expect(Contains(panel_source, "ExportLastAnalysisToJson"), "Panel source must call ExportLastAnalysisToJson");
+
+  const std::string service_header = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Public/RivaTraceService.h");
+  Expect(Contains(service_header, "ExportLastAnalysisToMarkdown(const FString&"), "Service header must declare ExportLastAnalysisToMarkdown");
+  Expect(Contains(service_header, "ExportLastAnalysisToJson(const FString&"), "Service header must declare ExportLastAnalysisToJson");
+
+  const std::string service_source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/RivaTraceService.cpp");
+  Expect(Contains(service_source, "GLastAnalysisResult"), "Service source must cache GLastAnalysisResult");
+  Expect(Contains(service_source, "FFileHelper::SaveStringToFile"), "Service source must use FFileHelper::SaveStringToFile");
+}
+
 }  // namespace
 
 int main() {
@@ -186,6 +205,7 @@ int main() {
   TestTraceServicesLoader();
   TestSelectionSync();
   TestMarkerEvents();
+  TestExportActions();
   std::cout << "All Unreal Engine plugin structure tests passed successfully!\n";
   return 0;
 }

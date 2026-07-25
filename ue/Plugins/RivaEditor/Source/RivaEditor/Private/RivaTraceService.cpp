@@ -3,9 +3,12 @@
 #include "riva/analysis_engine.hpp"
 #include "riva/report_engine.hpp"
 #include "Math/UnrealMathUtility.h"
+#include "Misc/FileHelper.h"
+#include <memory>
 
 namespace {
     TFunction<void(double, double)> GOnInsightsRangeSelectedCallback = nullptr;
+    std::unique_ptr<riva::AnalysisResult> GLastAnalysisResult = nullptr;
 }
 
 bool FRivaTraceService::LoadAndAnalyzeTrace(const FString& FilePath, TArray<FRivaUiFinding>& OutFindings, FString& OutErrorMessage)
@@ -107,11 +110,13 @@ bool FRivaTraceService::LoadAndAnalyzeUTrace(const FString& UTraceFilePath, TArr
     }
 
     riva::AnalysisEngine Engine;
-    riva::AnalysisReport Report = Engine.Analyze(Trace);
+    riva::AnalysisResult Result = Engine.Analyze(Trace);
+    GLastAnalysisResult = std::make_unique<riva::AnalysisResult>(Result);
 
     OutFindings.Empty();
-    for (const riva::Finding& Finding : Report.findings)
+    for (const riva::ResolvedFinding& Resolved : Result.findings)
     {
+        const riva::Finding& Finding = Resolved.finding;
         FRivaUiFinding UiFinding;
         UiFinding.Title = FText::FromString(FString(Finding.title.c_str()));
         UiFinding.Role = Finding.is_primary ? NSLOCTEXT("RivaTraceService", "RolePrimary", "[Primary]") : NSLOCTEXT("RivaTraceService", "RoleSecondary", "[Secondary]");
@@ -157,11 +162,13 @@ bool FRivaTraceService::LoadAndAnalyzeJsonTrace(const FString& JsonFilePath, TAr
     }
 
     riva::AnalysisEngine Engine;
-    riva::AnalysisReport Report = Engine.Analyze(LoadResult.GetValue());
+    riva::AnalysisResult Result = Engine.Analyze(LoadResult.GetValue());
+    GLastAnalysisResult = std::make_unique<riva::AnalysisResult>(Result);
 
     OutFindings.Empty();
-    for (const riva::Finding& Finding : Report.findings)
+    for (const riva::ResolvedFinding& Resolved : Result.findings)
     {
+        const riva::Finding& Finding = Resolved.finding;
         FRivaUiFinding UiFinding;
         UiFinding.Title = FText::FromString(FString(Finding.title.c_str()));
         UiFinding.Role = Finding.is_primary ? NSLOCTEXT("RivaTraceService", "RolePrimary", "[Primary]") : NSLOCTEXT("RivaTraceService", "RoleSecondary", "[Secondary]");
@@ -219,6 +226,42 @@ void FRivaTraceService::SimulateInsightsSelection(double StartTimeMs, double End
     {
         GOnInsightsRangeSelectedCallback(StartTimeMs, EndTimeMs);
     }
+}
+
+bool FRivaTraceService::ExportLastAnalysisToMarkdown(const FString& OutFilePath, FString& OutErrorMessage)
+{
+    if (!GLastAnalysisResult)
+    {
+        OutErrorMessage = TEXT("No analysis result available to export.");
+        return false;
+    }
+    std::string OutReport;
+    riva::FReportOptions Options;
+    riva::Status Status = riva::FReportEngine::GenerateMarkdownReport(*GLastAnalysisResult, Options, OutReport);
+    if (!Status.ok())
+    {
+        OutErrorMessage = FString(Status.message().c_str());
+        return false;
+    }
+    return FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(OutReport.c_str())), *OutFilePath);
+}
+
+bool FRivaTraceService::ExportLastAnalysisToJson(const FString& OutFilePath, FString& OutErrorMessage)
+{
+    if (!GLastAnalysisResult)
+    {
+        OutErrorMessage = TEXT("No analysis result available to export.");
+        return false;
+    }
+    std::string OutReport;
+    riva::FReportOptions Options;
+    riva::Status Status = riva::FReportEngine::GenerateJsonReport(*GLastAnalysisResult, Options, OutReport);
+    if (!Status.ok())
+    {
+        OutErrorMessage = FString(Status.message().c_str());
+        return false;
+    }
+    return FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(OutReport.c_str())), *OutFilePath);
 }
 
 #if !defined(RIVA_CMAKE_BUILD)
