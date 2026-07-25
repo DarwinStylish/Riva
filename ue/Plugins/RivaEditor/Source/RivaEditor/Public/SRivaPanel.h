@@ -13,6 +13,8 @@ struct FRivaUiFinding
     FText Confidence;
     FText TimeWindow;
     FText DetailedReport;
+    double StartTimeMs;
+    double EndTimeMs;
 };
 
 class SRivaPanel : public SCompoundWidget
@@ -22,6 +24,7 @@ public:
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
+    virtual ~SRivaPanel();
 
     void OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FString& ErrorMessage);
 
@@ -33,6 +36,9 @@ private:
     FReply OnAnalyzeClicked();
     FReply OnExportMarkdownClicked();
     FReply OnExportJsonClicked();
+    FReply OnSimulateInsightsSyncClicked();
+    void OnSyncInsightsToggled(ECheckBoxState NewState);
+    void OnInsightsTimeRangeSelected(double StartMs, double EndMs);
 
     void PopulateInitialState();
     void RunAsyncAnalysis(const FString& TracePath);
@@ -44,4 +50,5 @@ private:
     TSharedPtr<class STextBlock> StatusBarText;
 
     int32 CurrentSampleIndex;
+    bool bSyncWithInsightsEnabled;
 };

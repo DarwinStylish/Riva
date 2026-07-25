@@ -21,6 +21,11 @@ void SRivaPanel::Construct(const FArguments& InArgs)
     UE_LOG(LogRivaEditor, Log, TEXT("Constructing SRivaPanel dockable tab widget layout."));
 
     CurrentSampleIndex = 0;
+    bSyncWithInsightsEnabled = true;
+    FRivaTraceService::RegisterInsightsSelectionCallback([this](double StartMs, double EndMs) {
+        OnInsightsTimeRangeSelected(StartMs, EndMs);
+    });
+
     PopulateInitialState();
 
     ChildSlot
@@ -83,6 +88,7 @@ void SRivaPanel::Construct(const FArguments& InArgs)
 
                     + SHorizontalBox::Slot()
                     .AutoWidth()
+                    .Padding(0.0f, 0.0f, 6.0f, 0.0f)
                     [
                         SNew(SButton)
                         .OnClicked(this, &SRivaPanel::OnExportJsonClicked)
@@ -90,6 +96,32 @@ void SRivaPanel::Construct(const FArguments& InArgs)
                         [
                             SNew(STextBlock)
                             .Text(LOCTEXT("ExportJsonButton", "Export JSON..."))
+                        ]
+                    ]
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    .Padding(0.0f, 0.0f, 6.0f, 0.0f)
+                    [
+                        SNew(SCheckBox)
+                        .IsChecked(ECheckBoxState::Checked)
+                        .OnCheckStateChanged(this, &SRivaPanel::OnSyncInsightsToggled)
+                        .ToolTipText(LOCTEXT("SyncInsightsTooltip", "Toggle bidirectional time range synchronization with Unreal Insights."))
+                        [
+                            SNew(STextBlock)
+                            .Text(LOCTEXT("SyncInsightsToggle", "Sync Insights"))
+                        ]
+                    ]
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    [
+                        SNew(SButton)
+                        .OnClicked(this, &SRivaPanel::OnSimulateInsightsSyncClicked)
+                        .ToolTipText(LOCTEXT("SimulateSyncTooltip", "Simulate receiving an inbound time range selection from Unreal Insights."))
+                        [
+                            SNew(STextBlock)
+                            .Text(LOCTEXT("SimulateSyncButton", "Simulate Sync"))
                         ]
                     ]
                 ]
@@ -186,6 +218,8 @@ void SRivaPanel::PopulateInitialState()
     Finding1->Role = LOCTEXT("Sample1Role", "[Primary]");
     Finding1->Confidence = LOCTEXT("Sample1Conf", "Confidence: 89.0%");
     Finding1->TimeWindow = LOCTEXT("Sample1Time", "32.00 ms - 84.00 ms");
+    Finding1->StartTimeMs = 32.0;
+    Finding1->EndTimeMs = 84.0;
     Finding1->DetailedReport = LOCTEXT("Sample1Report",
         "Executive Summary:\n"
         "Primary finding selected by calibrated confidence and runtime shader worker evidence.\n\n"
@@ -203,6 +237,8 @@ void SRivaPanel::PopulateInitialState()
     Finding2->Role = LOCTEXT("Sample2Role", "[Secondary]");
     Finding2->Confidence = LOCTEXT("Sample2Conf", "Confidence: 70.0%");
     Finding2->TimeWindow = LOCTEXT("Sample2Time", "32.00 ms - 77.00 ms");
+    Finding2->StartTimeMs = 32.0;
+    Finding2->EndTimeMs = 77.0;
     Finding2->DetailedReport = LOCTEXT("Sample2Report",
         "Executive Summary:\n"
         "Secondary finding detected concurrent with primary stall.\n\n"
@@ -274,6 +310,11 @@ void SRivaPanel::OnFindingSelectionChanged(TSharedPtr<FRivaUiFinding> InItem, ES
         DetailsTitleText->SetText(InItem->Title);
         DetailsContentText->SetText(InItem->DetailedReport);
         StatusBarText->SetText(FText::Format(LOCTEXT("StatusSelected", "Status: Inspecting finding — {0}"), InItem->Title));
+
+        if (bSyncWithInsightsEnabled)
+        {
+            FRivaTraceService::BroadcastTimeRangeSelection(InItem->StartTimeMs, InItem->EndTimeMs);
+        }
     }
     else
     {
@@ -370,6 +411,55 @@ FReply SRivaPanel::OnExportJsonClicked()
     UE_LOG(LogRivaEditor, Log, TEXT("Export JSON action triggered."));
     StatusBarText->SetText(LOCTEXT("StatusExportJsonClicked", "Status: JSON report export initiated."));
     return FReply::Handled();
+}
+
+SRivaPanel::~SRivaPanel()
+{
+    FRivaTraceService::UnregisterInsightsSelectionCallback();
+}
+
+void SRivaPanel::OnSyncInsightsToggled(ECheckBoxState NewState)
+{
+    bSyncWithInsightsEnabled = (NewState == ECheckBoxState::Checked);
+    UE_LOG(LogRivaEditor, Log, TEXT("Unreal Insights bidirectional sync toggled: %s"), bSyncWithInsightsEnabled ? TEXT("ON") : TEXT("OFF"));
+    if (StatusBarText.IsValid())
+    {
+        StatusBarText->SetText(bSyncWithInsightsEnabled
+            ? LOCTEXT("StatusSyncOn", "Status: Unreal Insights synchronization enabled — time windows linked.")
+            : LOCTEXT("StatusSyncOff", "Status: Unreal Insights synchronization disabled."));
+    }
+}
+
+FReply SRivaPanel::OnSimulateInsightsSyncClicked()
+{
+    UE_LOG(LogRivaEditor, Log, TEXT("Simulate Sync action triggered."));
+    FRivaTraceService::SimulateInsightsSelection(32.0, 84.0);
+    return FReply::Handled();
+}
+
+void SRivaPanel::OnInsightsTimeRangeSelected(double StartMs, double EndMs)
+{
+    if (!bSyncWithInsightsEnabled)
+    {
+        return;
+    }
+
+    UE_LOG(LogRivaEditor, Log, TEXT("Inbound Insights time range selection received: %.2f ms - %.2f ms"), StartMs, EndMs);
+    for (const TSharedPtr<FRivaUiFinding>& Finding : FindingsList)
+    {
+        if (Finding.IsValid() && Finding->StartTimeMs <= EndMs && Finding->EndTimeMs >= StartMs)
+        {
+            if (FindingsListView.IsValid())
+            {
+                FindingsListView->SetSelection(Finding);
+                if (StatusBarText.IsValid())
+                {
+                    StatusBarText->SetText(FText::Format(LOCTEXT("StatusSyncReceived", "Status: Synchronized from Unreal Insights — selected '{0}'."), Finding->Title));
+                }
+            }
+            break;
+        }
+    }
 }
 
 #undef LOCTEXT_NAMESPACE
