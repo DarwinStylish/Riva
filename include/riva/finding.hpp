@@ -29,6 +29,7 @@ struct Finding {
   std::vector<Evidence> evidence;
   std::vector<std::string> suggested_next_steps;
   std::vector<std::string> how_to_confirm;
+  std::vector<std::string> related_finding_ids;
 };
 
 }  // namespace riva

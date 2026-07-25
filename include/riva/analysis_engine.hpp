@@ -8,12 +8,14 @@
 #include "riva/normalized_trace.hpp"
 #include "riva/signature.hpp"
 #include "riva/spike_detector.hpp"
+#include "riva/causal_chain_resolver.hpp"
 #include "riva/correlation_resolver.hpp"
 
 namespace riva {
 
 struct AnalysisConfig {
   SpikeDetectionConfig spike_detection;
+  CausalChainResolverConfig causal_chain_resolution;
   ConfidenceResolverConfig confidence_resolution;
   CorrelationResolverConfig correlation_resolution;
 };
