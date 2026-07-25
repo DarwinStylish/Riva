@@ -13,8 +13,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 
 add_library(riva_core
+  src/builtin_signatures.cpp
   src/normalized_trace.cpp
   src/signature_result.cpp
+  src/signature_utils.cpp
   src/spike_detector.cpp
   src/version.cpp
 )
@@ -28,4 +30,19 @@ if(MSVC)
   target_compile_options(riva_core PRIVATE /W4 /permissive-)
 else()
   target_compile_options(riva_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(RIVA_BUILD_TESTS)
+  enable_testing()
+
+  add_executable(riva_builtin_signatures_tests
+    tests/builtin_signatures_test.cpp
+  )
+
+  target_link_libraries(riva_builtin_signatures_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_builtin_signatures_tests COMMAND riva_builtin_signatures_tests)
 endif()
