@@ -142,6 +142,27 @@ void TestTraceServicesLoader() {
   Expect(Contains(panel_source, "spike_shader_compile.json"), "Panel must reference exact spike_shader_compile sample filename");
 }
 
+void TestSelectionSync() {
+  const std::string panel_h = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Public/SRivaPanel.h");
+  Expect(Contains(panel_h, "double StartTimeMs"), "Panel header must declare StartTimeMs");
+  Expect(Contains(panel_h, "double EndTimeMs"), "Panel header must declare EndTimeMs");
+  Expect(Contains(panel_h, "bool bSyncWithInsightsEnabled"), "Panel header must declare bSyncWithInsightsEnabled");
+  Expect(Contains(panel_h, "OnSyncInsightsToggled"), "Panel header must declare OnSyncInsightsToggled");
+
+  const std::string panel_cpp = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
+  Expect(Contains(panel_cpp, "BroadcastTimeRangeSelection"), "Panel source must broadcast time range selections");
+  Expect(Contains(panel_cpp, "RegisterInsightsSelectionCallback"), "Panel source must register callback");
+  Expect(Contains(panel_cpp, "SimulateInsightsSelection"), "Panel source must support simulation trigger");
+
+  const std::string service_h = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Public/RivaTraceService.h");
+  Expect(Contains(service_h, "BroadcastTimeRangeSelection"), "Service header must declare BroadcastTimeRangeSelection");
+  Expect(Contains(service_h, "RegisterInsightsSelectionCallback"), "Service header must declare callback registration");
+  Expect(Contains(service_h, "SimulateInsightsSelection"), "Service header must declare SimulateInsightsSelection");
+
+  const std::string service_cpp = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/RivaTraceService.cpp");
+  Expect(Contains(service_cpp, "GOnInsightsRangeSelectedCallback"), "Service source must manage callback instance");
+}
+
 }  // namespace
 
 int main() {
@@ -151,6 +172,7 @@ int main() {
   TestSlateWidget();
   TestCoreIntegration();
   TestTraceServicesLoader();
+  TestSelectionSync();
   std::cout << "All Unreal Engine plugin structure tests passed successfully!\n";
   return 0;
 }

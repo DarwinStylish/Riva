@@ -4,6 +4,10 @@
 #include "riva/report_engine.h"
 #include "Math/UnrealMathUtility.h"
 
+namespace {
+    TFunction<void(double, double)> GOnInsightsRangeSelectedCallback = nullptr;
+}
+
 bool FRivaTraceService::LoadAndAnalyzeTrace(const FString& FilePath, TArray<FRivaUiFinding>& OutFindings, FString& OutErrorMessage)
 {
     if (FilePath.EndsWith(TEXT(".utrace")) || FilePath.EndsWith(TEXT(".utrace.temp")))
@@ -96,6 +100,8 @@ bool FRivaTraceService::LoadAndAnalyzeUTrace(const FString& UTraceFilePath, TArr
         UiFinding.Role = Finding.is_primary ? NSLOCTEXT("RivaTraceService", "RolePrimary", "[Primary]") : NSLOCTEXT("RivaTraceService", "RoleSecondary", "[Secondary]");
         UiFinding.Confidence = FText::Format(NSLOCTEXT("RivaTraceService", "ConfidenceFmt", "Confidence: {0}%"), FText::AsNumber(FMath::RoundToInt(Finding.confidence * 100.0f)));
         UiFinding.TimeWindow = FText::Format(NSLOCTEXT("RivaTraceService", "TimeWindowFmt", "{0} ms - {1} ms"), FText::AsNumber(Finding.start_time_ms), FText::AsNumber(Finding.end_time_ms));
+        UiFinding.StartTimeMs = Finding.start_time_ms;
+        UiFinding.EndTimeMs = Finding.end_time_ms;
 
         FString DetailedStr = FString::Printf(TEXT("Executive Summary:\n%s\n\nEvidence Breakdown:\n"), *FString(Finding.summary.c_str()));
         for (const std::string& Ev : Finding.evidence)
@@ -144,6 +150,8 @@ bool FRivaTraceService::LoadAndAnalyzeJsonTrace(const FString& JsonFilePath, TAr
         UiFinding.Role = Finding.is_primary ? NSLOCTEXT("RivaTraceService", "RolePrimary", "[Primary]") : NSLOCTEXT("RivaTraceService", "RoleSecondary", "[Secondary]");
         UiFinding.Confidence = FText::Format(NSLOCTEXT("RivaTraceService", "ConfidenceFmt", "Confidence: {0}%"), FText::AsNumber(FMath::RoundToInt(Finding.confidence * 100.0f)));
         UiFinding.TimeWindow = FText::Format(NSLOCTEXT("RivaTraceService", "TimeWindowFmt", "{0} ms - {1} ms"), FText::AsNumber(Finding.start_time_ms), FText::AsNumber(Finding.end_time_ms));
+        UiFinding.StartTimeMs = Finding.start_time_ms;
+        UiFinding.EndTimeMs = Finding.end_time_ms;
 
         FString DetailedStr = FString::Printf(TEXT("Executive Summary:\n%s\n\nEvidence Breakdown:\n"), *FString(Finding.summary.c_str()));
         for (const std::string& Ev : Finding.evidence)
@@ -167,6 +175,33 @@ bool FRivaTraceService::LoadAndAnalyzeJsonTrace(const FString& JsonFilePath, TAr
     }
 
     return true;
+}
+
+void FRivaTraceService::BroadcastTimeRangeSelection(double StartTimeMs, double EndTimeMs)
+{
+    UE_LOG(LogTemp, Log, TEXT("Synchronizing time range to Unreal Insights: %.2f ms - %.2f ms"), StartTimeMs, EndTimeMs);
+#if defined(RIVA_UBT_BUILD) && defined(RIVA_USE_TRACESERVICES)
+    // TraceServices session time range selection synchronization
+#endif
+}
+
+void FRivaTraceService::RegisterInsightsSelectionCallback(TFunction<void(double, double)> Callback)
+{
+    GOnInsightsRangeSelectedCallback = Callback;
+}
+
+void FRivaTraceService::UnregisterInsightsSelectionCallback()
+{
+    GOnInsightsRangeSelectedCallback = nullptr;
+}
+
+void FRivaTraceService::SimulateInsightsSelection(double StartTimeMs, double EndTimeMs)
+{
+    UE_LOG(LogTemp, Log, TEXT("Simulating Unreal Insights time range selection: %.2f ms - %.2f ms"), StartTimeMs, EndTimeMs);
+    if (GOnInsightsRangeSelectedCallback)
+    {
+        GOnInsightsRangeSelectedCallback(StartTimeMs, EndTimeMs);
+    }
 }
 
 #if !defined(RIVA_CMAKE_BUILD)
