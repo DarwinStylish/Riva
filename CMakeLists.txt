@@ -38,36 +38,81 @@ else()
   target_compile_options(riva_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_executable(riva
+  apps/riva-cli/main.cpp
+)
+
+target_link_libraries(riva
+  PRIVATE
+    riva_core
+)
+
 if(RIVA_BUILD_TESTS)
   enable_testing()
+
+  add_executable(riva_smoke_tests
+    tests/smoke_test.cpp
+  )
+
+  target_link_libraries(riva_smoke_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_smoke_tests COMMAND riva_smoke_tests)
+
+  add_executable(riva_core_engine_tests
+    tests/core_engine_test.cpp
+  )
+
+  target_link_libraries(riva_core_engine_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_core_engine_tests COMMAND riva_core_engine_tests)
 
   add_executable(riva_builtin_signatures_tests
     tests/builtin_signatures_test.cpp
   )
-  target_link_libraries(riva_builtin_signatures_tests PRIVATE riva_core)
+
+  target_link_libraries(riva_builtin_signatures_tests
+    PRIVATE
+      riva_core
+  )
+
   add_test(NAME riva_builtin_signatures_tests COMMAND riva_builtin_signatures_tests)
 
   add_executable(riva_confidence_resolver_tests
     tests/confidence_resolver_test.cpp
   )
-  target_link_libraries(riva_confidence_resolver_tests PRIVATE riva_core)
-  add_test(NAME riva_confidence_resolver_tests COMMAND riva_confidence_resolver_tests)
 
-  add_executable(riva_core_engine_tests
-    tests/core_engine_test.cpp
+  target_link_libraries(riva_confidence_resolver_tests
+    PRIVATE
+      riva_core
   )
-  target_link_libraries(riva_core_engine_tests PRIVATE riva_core)
-  add_test(NAME riva_core_engine_tests COMMAND riva_core_engine_tests)
+
+  add_test(NAME riva_confidence_resolver_tests COMMAND riva_confidence_resolver_tests)
 
   add_executable(riva_json_trace_loader_tests
     tests/json_trace_loader_test.cpp
   )
-  target_link_libraries(riva_json_trace_loader_tests PRIVATE riva_core)
+
+  target_link_libraries(riva_json_trace_loader_tests
+    PRIVATE
+      riva_core
+  )
+
   add_test(NAME riva_json_trace_loader_tests COMMAND riva_json_trace_loader_tests)
 
   add_executable(riva_trace_adapter_tests
     tests/trace_adapter_test.cpp
   )
-  target_link_libraries(riva_trace_adapter_tests PRIVATE riva_core)
+
+  target_link_libraries(riva_trace_adapter_tests
+    PRIVATE
+      riva_core
+  )
+
   add_test(NAME riva_trace_adapter_tests COMMAND riva_trace_adapter_tests)
 endif()
