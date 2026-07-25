@@ -10,6 +10,8 @@
 #include "Styling/AppStyle.h"
 #if defined(RIVA_UBT_BUILD)
 #include "Async/Async.h"
+#include "DesktopPlatformModule.h"
+#include "IDesktopPlatform.h"
 #endif
 
 #define LOCTEXT_NAMESPACE "SRivaPanel"
@@ -402,14 +404,48 @@ FReply SRivaPanel::OnAnalyzeClicked()
 FReply SRivaPanel::OnExportMarkdownClicked()
 {
     UE_LOG(LogRivaEditor, Log, TEXT("Export Markdown action triggered."));
-    StatusBarText->SetText(LOCTEXT("StatusExportMdClicked", "Status: Markdown report export initiated."));
+#if defined(RIVA_UBT_BUILD)
+    if (IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get())
+    {
+        TArray<FString> OutFileNames;
+        if (DesktopPlatform->SaveFileDialog(nullptr, LOCTEXT("SaveMarkdownTitle", "Export Riva Markdown Report").ToString(), FPaths::ProjectDir(), TEXT("RivaReport.md"), TEXT("Markdown Files (*.md)|*.md"), EFileDialogFlags::None, OutFileNames) && OutFileNames.Num() > 0)
+        {
+            FString ErrorMessage;
+            if (FRivaTraceService::ExportLastAnalysisToMarkdown(OutFileNames[0], ErrorMessage))
+            {
+                StatusBarText->SetText(LOCTEXT("StatusExportMdSuccess", "Status: Markdown report exported successfully."));
+            }
+            else
+            {
+                StatusBarText->SetText(FText::Format(LOCTEXT("StatusExportMdError", "Status: Export failed — {0}"), FText::FromString(ErrorMessage)));
+            }
+        }
+    }
+#endif
     return FReply::Handled();
 }
 
 FReply SRivaPanel::OnExportJsonClicked()
 {
     UE_LOG(LogRivaEditor, Log, TEXT("Export JSON action triggered."));
-    StatusBarText->SetText(LOCTEXT("StatusExportJsonClicked", "Status: JSON report export initiated."));
+#if defined(RIVA_UBT_BUILD)
+    if (IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get())
+    {
+        TArray<FString> OutFileNames;
+        if (DesktopPlatform->SaveFileDialog(nullptr, LOCTEXT("SaveJsonTitle", "Export Riva JSON Report").ToString(), FPaths::ProjectDir(), TEXT("RivaReport.json"), TEXT("JSON Files (*.json)|*.json"), EFileDialogFlags::None, OutFileNames) && OutFileNames.Num() > 0)
+        {
+            FString ErrorMessage;
+            if (FRivaTraceService::ExportLastAnalysisToJson(OutFileNames[0], ErrorMessage))
+            {
+                StatusBarText->SetText(LOCTEXT("StatusExportJsonSuccess", "Status: JSON report exported successfully."));
+            }
+            else
+            {
+                StatusBarText->SetText(FText::Format(LOCTEXT("StatusExportJsonError", "Status: Export failed — {0}"), FText::FromString(ErrorMessage)));
+            }
+        }
+    }
+#endif
     return FReply::Handled();
 }
 

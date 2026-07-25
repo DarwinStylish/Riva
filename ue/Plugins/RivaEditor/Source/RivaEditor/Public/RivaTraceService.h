@@ -25,4 +25,6 @@ public:
     static void RegisterInsightsSelectionCallback(TFunction<void(double, double)> Callback);
     static void UnregisterInsightsSelectionCallback();
     static void SimulateInsightsSelection(double StartTimeMs, double EndTimeMs);
+    static bool ExportLastAnalysisToMarkdown(const FString& OutFilePath, FString& OutErrorMessage);
+    static bool ExportLastAnalysisToJson(const FString& OutFilePath, FString& OutErrorMessage);
 };
