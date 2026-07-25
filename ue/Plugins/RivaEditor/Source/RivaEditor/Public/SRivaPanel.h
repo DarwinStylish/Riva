@@ -36,6 +36,8 @@ private:
     FReply OnAnalyzeClicked();
     FReply OnExportMarkdownClicked();
     FReply OnExportJsonClicked();
+    FReply OnCopySummaryClicked();
+    FReply OnCopyTimeWindowClicked();
     FReply OnSimulateInsightsSyncClicked();
     void OnSyncInsightsToggled(ECheckBoxState NewState);
     void OnInsightsTimeRangeSelected(double StartMs, double EndMs);
@@ -46,8 +48,10 @@ private:
     TArray<TSharedPtr<FRivaUiFinding>> FindingsList;
     TSharedPtr<SListView<TSharedPtr<FRivaUiFinding>>> FindingsListView;
     TSharedPtr<class STextBlock> DetailsTitleText;
+    TSharedPtr<class STextBlock> DetailsTimeWindowText;
     TSharedPtr<class STextBlock> DetailsContentText;
     TSharedPtr<class STextBlock> StatusBarText;
+    TSharedPtr<FRivaUiFinding> SelectedFinding;
 
     int32 CurrentSampleIndex;
     bool bSyncWithInsightsEnabled;

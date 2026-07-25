@@ -194,6 +194,17 @@ void TestExportActions() {
   Expect(Contains(service_source, "FFileHelper::SaveStringToFile"), "Service source must use FFileHelper::SaveStringToFile");
 }
 
+void TestCopyActions() {
+  const std::string panel_source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
+  Expect(Contains(panel_source, "FPlatformApplicationMisc::ClipboardCopy"), "Panel source must use ClipboardCopy");
+  Expect(Contains(panel_source, "OnCopySummaryClicked"), "Panel source must implement OnCopySummaryClicked");
+  Expect(Contains(panel_source, "OnCopyTimeWindowClicked"), "Panel source must implement OnCopyTimeWindowClicked");
+
+  const std::string panel_header = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Public/SRivaPanel.h");
+  Expect(Contains(panel_header, "OnCopySummaryClicked"), "Panel header must declare OnCopySummaryClicked");
+  Expect(Contains(panel_header, "OnCopyTimeWindowClicked"), "Panel header must declare OnCopyTimeWindowClicked");
+}
+
 }  // namespace
 
 int main() {
@@ -206,6 +217,7 @@ int main() {
   TestSelectionSync();
   TestMarkerEvents();
   TestExportActions();
+  TestCopyActions();
   std::cout << "All Unreal Engine plugin structure tests passed successfully!\n";
   return 0;
 }

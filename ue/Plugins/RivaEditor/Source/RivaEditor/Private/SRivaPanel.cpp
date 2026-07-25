@@ -8,6 +8,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/SBoxPanel.h"
 #include "Styling/AppStyle.h"
+#include "HAL/PlatformApplicationMisc.h"
 #if defined(RIVA_UBT_BUILD)
 #include "Async/Async.h"
 #include "DesktopPlatformModule.h"
@@ -187,6 +188,36 @@ void SRivaPanel::Construct(const FArguments& InArgs)
                         ]
 
                         + SScrollBox::Slot()
+                        .Padding(0.0f, 0.0f, 0.0f, 12.0f)
+                        [
+                            SNew(SHorizontalBox)
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 12.0f, 0.0f)
+                            .VAlign(VAlign_Center)
+                            [
+                                SAssignNew(DetailsTimeWindowText, STextBlock)
+                                .Text(LOCTEXT("DefaultTimeWindow", ""))
+                                .ColorAndOpacity(FSlateColor::UseSubduedForeground())
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            .Padding(0.0f, 0.0f, 4.0f, 0.0f)
+                            [
+                                SNew(SButton)
+                                .Text(LOCTEXT("CopyTimeWindowBtn", "Copy Time Window"))
+                                .OnClicked(this, &SRivaPanel::OnCopyTimeWindowClicked)
+                            ]
+                            + SHorizontalBox::Slot()
+                            .AutoWidth()
+                            [
+                                SNew(SButton)
+                                .Text(LOCTEXT("CopySummaryBtn", "Copy Summary"))
+                                .OnClicked(this, &SRivaPanel::OnCopySummaryClicked)
+                            ]
+                        ]
+
+                        + SScrollBox::Slot()
                         [
                             SAssignNew(DetailsContentText, STextBlock)
                             .Text(LOCTEXT("DefaultDetailsContent", "Select a detected hitch from the findings list on the left to inspect its calibrated confidence, supporting runtime evidence, and Unreal Insights confirmation guidance."))
@@ -307,9 +338,12 @@ TSharedRef<ITableRow> SRivaPanel::OnGenerateFindingRow(TSharedPtr<FRivaUiFinding
 
 void SRivaPanel::OnFindingSelectionChanged(TSharedPtr<FRivaUiFinding> InItem, ESelectInfo::Type SelectInfo)
 {
+    SelectedFinding = InItem;
+
     if (InItem.IsValid())
     {
         DetailsTitleText->SetText(InItem->Title);
+        DetailsTimeWindowText->SetText(InItem->TimeWindow);
         DetailsContentText->SetText(InItem->DetailedReport);
         StatusBarText->SetText(FText::Format(LOCTEXT("StatusSelected", "Status: Inspecting finding — {0}"), InItem->Title));
 
@@ -321,6 +355,7 @@ void SRivaPanel::OnFindingSelectionChanged(TSharedPtr<FRivaUiFinding> InItem, ES
     else
     {
         DetailsTitleText->SetText(LOCTEXT("DefaultDetailsTitle", "Diagnostic Evidence & Actionable Guidance"));
+        DetailsTimeWindowText->SetText(FText::GetEmpty());
         DetailsContentText->SetText(LOCTEXT("DefaultDetailsContent", "Select a detected hitch from the findings list on the left to inspect its calibrated confidence, supporting runtime evidence, and Unreal Insights confirmation guidance."));
         StatusBarText->SetText(LOCTEXT("StatusReady", "Status: Ready for trace analysis — 2 sample hitches loaded."));
     }
@@ -398,6 +433,26 @@ FReply SRivaPanel::OnAnalyzeClicked()
     UE_LOG(LogRivaEditor, Log, TEXT("Analyze action triggered. Running analysis on default sample session."));
     const FString DefaultPath = TEXT("../../../samples/sample_session.utrace");
     RunAsyncAnalysis(DefaultPath);
+    return FReply::Handled();
+}
+
+FReply SRivaPanel::OnCopySummaryClicked()
+{
+    if (SelectedFinding.IsValid())
+    {
+        FPlatformApplicationMisc::ClipboardCopy(*SelectedFinding->DetailedReport.ToString());
+        StatusBarText->SetText(LOCTEXT("StatusCopiedSummary", "Status: Diagnostic summary copied to clipboard."));
+    }
+    return FReply::Handled();
+}
+
+FReply SRivaPanel::OnCopyTimeWindowClicked()
+{
+    if (SelectedFinding.IsValid())
+    {
+        FPlatformApplicationMisc::ClipboardCopy(*SelectedFinding->TimeWindow.ToString());
+        StatusBarText->SetText(LOCTEXT("StatusCopiedTimeWindow", "Status: Time window copied to clipboard."));
+    }
     return FReply::Handled();
 }
 
