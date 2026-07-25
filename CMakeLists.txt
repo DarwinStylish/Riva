@@ -138,4 +138,15 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_cli_integration_tests COMMAND riva_cli_integration_tests)
+
+  add_executable(riva_plugin_structure_tests
+    tests/plugin_structure_test.cpp
+  )
+
+  target_link_libraries(riva_plugin_structure_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_plugin_structure_tests COMMAND riva_plugin_structure_tests)
 endif()
