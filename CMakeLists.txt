@@ -127,4 +127,15 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_report_engine_tests COMMAND riva_report_engine_tests)
+
+  add_executable(riva_cli_integration_tests
+    tests/cli_integration_test.cpp
+  )
+
+  target_link_libraries(riva_cli_integration_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_cli_integration_tests COMMAND riva_cli_integration_tests)
 endif()
