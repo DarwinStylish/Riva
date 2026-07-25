@@ -13,7 +13,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 
 add_library(riva_core
+  src/analysis_engine.cpp
   src/builtin_signatures.cpp
+  src/confidence_resolver.cpp
   src/normalized_trace.cpp
   src/signature_result.cpp
   src/signature_utils.cpp
@@ -38,11 +40,18 @@ if(RIVA_BUILD_TESTS)
   add_executable(riva_builtin_signatures_tests
     tests/builtin_signatures_test.cpp
   )
-
-  target_link_libraries(riva_builtin_signatures_tests
-    PRIVATE
-      riva_core
-  )
-
+  target_link_libraries(riva_builtin_signatures_tests PRIVATE riva_core)
   add_test(NAME riva_builtin_signatures_tests COMMAND riva_builtin_signatures_tests)
+
+  add_executable(riva_confidence_resolver_tests
+    tests/confidence_resolver_test.cpp
+  )
+  target_link_libraries(riva_confidence_resolver_tests PRIVATE riva_core)
+  add_test(NAME riva_confidence_resolver_tests COMMAND riva_confidence_resolver_tests)
+
+  add_executable(riva_core_engine_tests
+    tests/core_engine_test.cpp
+  )
+  target_link_libraries(riva_core_engine_tests PRIVATE riva_core)
+  add_test(NAME riva_core_engine_tests COMMAND riva_core_engine_tests)
 endif()
