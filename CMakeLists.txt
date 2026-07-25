@@ -16,6 +16,7 @@ add_library(riva_core
   src/analysis_engine.cpp
   src/builtin_signatures.cpp
   src/confidence_resolver.cpp
+  src/json_trace_loader.cpp
   src/normalized_trace.cpp
   src/signature_result.cpp
   src/signature_utils.cpp
@@ -54,4 +55,10 @@ if(RIVA_BUILD_TESTS)
   )
   target_link_libraries(riva_core_engine_tests PRIVATE riva_core)
   add_test(NAME riva_core_engine_tests COMMAND riva_core_engine_tests)
+
+  add_executable(riva_json_trace_loader_tests
+    tests/json_trace_loader_test.cpp
+  )
+  target_link_libraries(riva_json_trace_loader_tests PRIVATE riva_core)
+  add_test(NAME riva_json_trace_loader_tests COMMAND riva_json_trace_loader_tests)
 endif()
