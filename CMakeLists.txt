@@ -15,6 +15,7 @@ option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 add_library(riva_core
   src/analysis_engine.cpp
   src/builtin_signatures.cpp
+  src/causal_chain_resolver.cpp
   src/confidence_resolver.cpp
   src/correlation_resolver.cpp
   src/default_analysis.cpp
@@ -84,6 +85,17 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_builtin_signatures_tests COMMAND riva_builtin_signatures_tests)
+
+  add_executable(riva_causal_chain_resolver_tests
+    tests/causal_chain_resolver_test.cpp
+  )
+
+  target_link_libraries(riva_causal_chain_resolver_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_causal_chain_resolver_tests COMMAND riva_causal_chain_resolver_tests)
 
   add_executable(riva_confidence_resolver_tests
     tests/confidence_resolver_test.cpp

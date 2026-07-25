@@ -28,6 +28,9 @@ AnalysisResult AnalysisEngine::Analyze(const NormalizedTrace& trace) const {
         std::make_move_iterator(signature_findings.end()));
   }
 
+  DefaultCausalChainResolver causal_resolver(config_.causal_chain_resolution);
+  raw_findings = causal_resolver.Resolve(std::move(raw_findings));
+
   ConfidenceResolver resolver(config_.confidence_resolution);
   auto result = resolver.Resolve(std::move(raw_findings));
 
