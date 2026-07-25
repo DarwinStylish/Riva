@@ -14,6 +14,8 @@ option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 
 add_library(riva_core
   src/normalized_trace.cpp
+  src/signature_result.cpp
+  src/spike_detector.cpp
   src/version.cpp
 )
 
