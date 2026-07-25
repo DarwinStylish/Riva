@@ -292,7 +292,7 @@ void SRivaPanel::RunAsyncAnalysis(const FString& TracePath)
     Async(EAsyncExecution::ThreadPool, [this, TracePath]() {
         TArray<FRivaUiFinding> ResultFindings;
         FString ErrorMsg;
-        const bool bSuccess = FRivaTraceService::LoadAndAnalyzeJsonTrace(TracePath, ResultFindings, ErrorMsg);
+        const bool bSuccess = FRivaTraceService::LoadAndAnalyzeTrace(TracePath, ResultFindings, ErrorMsg);
 
         Async(EAsyncExecution::TaskGraphMainThread, [this, bSuccess, ResultFindings, ErrorMsg]() {
             OnAnalysisCompleted(bSuccess, ResultFindings, ErrorMsg);
@@ -301,7 +301,7 @@ void SRivaPanel::RunAsyncAnalysis(const FString& TracePath)
 #else
     TArray<FRivaUiFinding> ResultFindings;
     FString ErrorMsg;
-    const bool bSuccess = FRivaTraceService::LoadAndAnalyzeJsonTrace(TracePath, ResultFindings, ErrorMsg);
+    const bool bSuccess = FRivaTraceService::LoadAndAnalyzeTrace(TracePath, ResultFindings, ErrorMsg);
     OnAnalysisCompleted(bSuccess, ResultFindings, ErrorMsg);
 #endif
 }
@@ -336,9 +336,10 @@ FReply SRivaPanel::OnOpenTraceClicked()
 {
     UE_LOG(LogRivaEditor, Log, TEXT("Open Trace action triggered. Cycling through sample trace datasets."));
     const TArray<FString> SampleTraces = {
-        TEXT("trace_01_shader_compile.json"),
-        TEXT("trace_02_pso_miss.json"),
-        TEXT("trace_03_streaming_io.json")
+        TEXT("spike_shader_compile.json"),
+        TEXT("spike_pso_miss.json"),
+        TEXT("spike_streaming_io.json"),
+        TEXT("sample_session.utrace")
     };
 
     CurrentSampleIndex = (CurrentSampleIndex + 1) % SampleTraces.Num();
@@ -351,8 +352,8 @@ FReply SRivaPanel::OnOpenTraceClicked()
 
 FReply SRivaPanel::OnAnalyzeClicked()
 {
-    UE_LOG(LogRivaEditor, Log, TEXT("Analyze action triggered. Running analysis on default sample trace."));
-    const FString DefaultPath = TEXT("../../../samples/trace_01_shader_compile.json");
+    UE_LOG(LogRivaEditor, Log, TEXT("Analyze action triggered. Running analysis on default sample session."));
+    const FString DefaultPath = TEXT("../../../samples/sample_session.utrace");
     RunAsyncAnalysis(DefaultPath);
     return FReply::Handled();
 }

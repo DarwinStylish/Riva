@@ -36,7 +36,10 @@ public class RivaEditor : ModuleRules
                 "ToolMenus",
                 "WorkspaceMenuStructure",
                 "EditorStyle",
-                "AppFramework"
+                "AppFramework",
+                "TraceServices",
+                "TraceLog",
+                "TraceAnalysis"
             }
         );
     }

@@ -115,9 +115,31 @@ void TestCoreIntegration() {
   Expect(Contains(source, "Engine.Analyze"), "Source must invoke AnalysisEngine::Analyze");
 
   const std::string panel_source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
-  Expect(Contains(panel_source, "FRivaTraceService::LoadAndAnalyzeJsonTrace"), "Panel must call FRivaTraceService::LoadAndAnalyzeJsonTrace");
+  Expect(Contains(panel_source, "FRivaTraceService::LoadAndAnalyzeTrace"), "Panel must call FRivaTraceService::LoadAndAnalyzeTrace");
   Expect(Contains(panel_source, "EAsyncExecution::ThreadPool"), "Panel must execute analysis on thread pool in UBT builds");
   Expect(Contains(panel_source, "EAsyncExecution::TaskGraphMainThread"), "Panel must marshal UI updates to main thread in UBT builds");
+}
+
+void TestTraceServicesLoader() {
+  const std::string build_cs = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/RivaEditor.Build.cs");
+  Expect(Contains(build_cs, "\"TraceServices\""), "Build rules must depend on TraceServices");
+  Expect(Contains(build_cs, "\"TraceLog\""), "Build rules must depend on TraceLog");
+  Expect(Contains(build_cs, "\"TraceAnalysis\""), "Build rules must depend on TraceAnalysis");
+
+  const std::string header = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Public/RivaTraceService.h");
+  Expect(Contains(header, "struct FRivaNormalizedTraceSummary"), "Header must declare FRivaNormalizedTraceSummary");
+  Expect(Contains(header, "bMarkerProviderAvailable"), "Summary must track bMarkerProviderAvailable");
+  Expect(Contains(header, "LoadAndAnalyzeUTrace"), "Header must declare LoadAndAnalyzeUTrace");
+  Expect(Contains(header, "LoadAndAnalyzeTrace"), "Header must declare LoadAndAnalyzeTrace");
+
+  const std::string source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/RivaTraceService.cpp");
+  Expect(Contains(source, "degrading gracefully"), "Source must handle marker degradation gracefully");
+  Expect(Contains(source, "utrace"), "Source must format trace metadata as utrace");
+  Expect(Contains(source, "Engine.Analyze(Trace)"), "Source must pass converted NormalizedTrace to AnalysisEngine");
+
+  const std::string panel_source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
+  Expect(Contains(panel_source, "sample_session.utrace"), "Panel must include sample_session.utrace in sample rotation");
+  Expect(Contains(panel_source, "spike_shader_compile.json"), "Panel must reference exact spike_shader_compile sample filename");
 }
 
 }  // namespace
@@ -128,6 +150,7 @@ int main() {
   TestModuleImplementation();
   TestSlateWidget();
   TestCoreIntegration();
+  TestTraceServicesLoader();
   std::cout << "All Unreal Engine plugin structure tests passed successfully!\n";
   return 0;
 }

@@ -1,0 +1,8 @@
+# Unreal Insights Trace Recording (v5)
+# Session Format: utrace
+# Trace Metadata: duration_ms=2500.0, frames=150, bookmarks=0
+[BINARY_HEADER_MAGIC_UTRACE_01]
+FRAME_INDEX=0,START_MS=0.00,END_MS=16.66
+FRAME_INDEX=45,START_MS=749.70,END_MS=818.10,STALL_THREAD=GameThread,STALL_REASON=ShaderCompileWorker blocked frame
+FRAME_INDEX=149,START_MS=2483.34,END_MS=2500.00
+[BINARY_FOOTER_EOF]
