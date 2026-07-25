@@ -16,6 +16,7 @@ add_library(riva_core
   src/analysis_engine.cpp
   src/builtin_signatures.cpp
   src/confidence_resolver.cpp
+  src/correlation_resolver.cpp
   src/default_analysis.cpp
   src/json_trace_adapter.cpp
   src/json_trace_loader.cpp
@@ -94,6 +95,17 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_confidence_resolver_tests COMMAND riva_confidence_resolver_tests)
+
+  add_executable(riva_correlation_resolver_tests
+    tests/correlation_resolver_test.cpp
+  )
+
+  target_link_libraries(riva_correlation_resolver_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_correlation_resolver_tests COMMAND riva_correlation_resolver_tests)
 
   add_executable(riva_json_trace_loader_tests
     tests/json_trace_loader_test.cpp

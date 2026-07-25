@@ -30,6 +30,10 @@ AnalysisResult AnalysisEngine::Analyze(const NormalizedTrace& trace) const {
 
   ConfidenceResolver resolver(config_.confidence_resolution);
   auto result = resolver.Resolve(std::move(raw_findings));
+
+  DefaultCorrelationResolver correlator(config_.correlation_resolution);
+  result.findings = correlator.Resolve(result.findings);
+
   result.total_frames_analyzed = trace.frame_count();
   result.hitch_count = spikes.size();
   result.source_name = trace.source_name();
