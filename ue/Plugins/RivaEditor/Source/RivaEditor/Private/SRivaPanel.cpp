@@ -1,4 +1,5 @@
 #include "SRivaPanel.h"
+#include "RivaTraceService.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SBorder.h"
@@ -7,6 +8,9 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/SBoxPanel.h"
 #include "Styling/AppStyle.h"
+#if defined(RIVA_UBT_BUILD)
+#include "Async/Async.h"
+#endif
 
 #define LOCTEXT_NAMESPACE "SRivaPanel"
 
@@ -16,6 +20,7 @@ void SRivaPanel::Construct(const FArguments& InArgs)
 {
     UE_LOG(LogRivaEditor, Log, TEXT("Constructing SRivaPanel dockable tab widget layout."));
 
+    CurrentSampleIndex = 0;
     PopulateInitialState();
 
     ChildSlot
@@ -278,17 +283,77 @@ void SRivaPanel::OnFindingSelectionChanged(TSharedPtr<FRivaUiFinding> InItem, ES
     }
 }
 
+void SRivaPanel::RunAsyncAnalysis(const FString& TracePath)
+{
+    UE_LOG(LogRivaEditor, Log, TEXT("Initiating async trace analysis for path: %s"), *TracePath);
+    StatusBarText->SetText(LOCTEXT("StatusAnalyzing", "Status: Running async deterministic trace analysis on background thread pool..."));
+
+#if defined(RIVA_UBT_BUILD)
+    Async(EAsyncExecution::ThreadPool, [this, TracePath]() {
+        TArray<FRivaUiFinding> ResultFindings;
+        FString ErrorMsg;
+        const bool bSuccess = FRivaTraceService::LoadAndAnalyzeJsonTrace(TracePath, ResultFindings, ErrorMsg);
+
+        Async(EAsyncExecution::TaskGraphMainThread, [this, bSuccess, ResultFindings, ErrorMsg]() {
+            OnAnalysisCompleted(bSuccess, ResultFindings, ErrorMsg);
+        });
+    });
+#else
+    TArray<FRivaUiFinding> ResultFindings;
+    FString ErrorMsg;
+    const bool bSuccess = FRivaTraceService::LoadAndAnalyzeJsonTrace(TracePath, ResultFindings, ErrorMsg);
+    OnAnalysisCompleted(bSuccess, ResultFindings, ErrorMsg);
+#endif
+}
+
+void SRivaPanel::OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FString& ErrorMessage)
+{
+    if (bSuccess)
+    {
+        FindingsList.Empty();
+        for (const FRivaUiFinding& Finding : InFindings)
+        {
+            FindingsList.Add(MakeShared<FRivaUiFinding>(Finding));
+        }
+        if (FindingsListView.IsValid())
+        {
+            FindingsListView->RequestListRefresh();
+        }
+        StatusBarText->SetText(FText::Format(LOCTEXT("StatusSuccess", "Status: Analysis complete — {0} hitches detected."), FText::AsNumber(FindingsList.Num())));
+
+        if (FindingsList.Num() > 0 && FindingsListView.IsValid())
+        {
+            FindingsListView->SetSelection(FindingsList[0]);
+        }
+    }
+    else
+    {
+        StatusBarText->SetText(FText::Format(LOCTEXT("StatusError", "Status: Analysis failed — {0}"), FText::FromString(ErrorMessage)));
+    }
+}
+
 FReply SRivaPanel::OnOpenTraceClicked()
 {
-    UE_LOG(LogRivaEditor, Log, TEXT("Open Trace action triggered."));
-    StatusBarText->SetText(LOCTEXT("StatusOpenClicked", "Status: Open Trace dialog action initiated."));
+    UE_LOG(LogRivaEditor, Log, TEXT("Open Trace action triggered. Cycling through sample trace datasets."));
+    const TArray<FString> SampleTraces = {
+        TEXT("trace_01_shader_compile.json"),
+        TEXT("trace_02_pso_miss.json"),
+        TEXT("trace_03_streaming_io.json")
+    };
+
+    CurrentSampleIndex = (CurrentSampleIndex + 1) % SampleTraces.Num();
+    const FString SelectedSample = SampleTraces[CurrentSampleIndex];
+    const FString FullPath = FString::Printf(TEXT("../../../samples/%s"), *SelectedSample);
+
+    RunAsyncAnalysis(FullPath);
     return FReply::Handled();
 }
 
 FReply SRivaPanel::OnAnalyzeClicked()
 {
-    UE_LOG(LogRivaEditor, Log, TEXT("Analyze action triggered."));
-    StatusBarText->SetText(LOCTEXT("StatusAnalyzeClicked", "Status: Deterministic trace analysis executing..."));
+    UE_LOG(LogRivaEditor, Log, TEXT("Analyze action triggered. Running analysis on default sample trace."));
+    const FString DefaultPath = TEXT("../../../samples/trace_01_shader_compile.json");
+    RunAsyncAnalysis(DefaultPath);
     return FReply::Handled();
 }
 

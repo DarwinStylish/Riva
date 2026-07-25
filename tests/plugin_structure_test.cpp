@@ -102,6 +102,24 @@ void TestSlateWidget() {
   Expect(Contains(source, "Status: Ready for trace analysis"), "Source must render status bar ready state");
 }
 
+void TestCoreIntegration() {
+  const std::string header = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Public/RivaTraceService.h");
+  Expect(Contains(header, "class FRivaTraceService"), "Header must declare FRivaTraceService class");
+  Expect(Contains(header, "LoadAndAnalyzeJsonTrace"), "Header must declare LoadAndAnalyzeJsonTrace static method");
+
+  const std::string source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/RivaTraceService.cpp");
+  Expect(Contains(source, "riva/json_loader.h"), "Source must include riva/json_loader.h");
+  Expect(Contains(source, "riva/analysis_engine.h"), "Source must include riva/analysis_engine.h");
+  Expect(Contains(source, "TCHAR_TO_UTF8"), "Source must convert FString to UTF8 std::string");
+  Expect(Contains(source, "Loader.LoadTrace(StdFilePath)"), "Source must invoke JsonTraceLoader::LoadTrace");
+  Expect(Contains(source, "Engine.Analyze"), "Source must invoke AnalysisEngine::Analyze");
+
+  const std::string panel_source = ReadFileContent("ue/Plugins/RivaEditor/Source/RivaEditor/Private/SRivaPanel.cpp");
+  Expect(Contains(panel_source, "FRivaTraceService::LoadAndAnalyzeJsonTrace"), "Panel must call FRivaTraceService::LoadAndAnalyzeJsonTrace");
+  Expect(Contains(panel_source, "EAsyncExecution::ThreadPool"), "Panel must execute analysis on thread pool in UBT builds");
+  Expect(Contains(panel_source, "EAsyncExecution::TaskGraphMainThread"), "Panel must marshal UI updates to main thread in UBT builds");
+}
+
 }  // namespace
 
 int main() {
@@ -109,6 +127,7 @@ int main() {
   TestBuildRules();
   TestModuleImplementation();
   TestSlateWidget();
+  TestCoreIntegration();
   std::cout << "All Unreal Engine plugin structure tests passed successfully!\n";
   return 0;
 }
