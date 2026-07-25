@@ -20,6 +20,9 @@ struct ResolvedFinding {
 
 struct AnalysisResult {
   std::vector<ResolvedFinding> findings;
+  std::size_t total_frames_analyzed{0};
+  std::size_t hitch_count{0};
+  std::string source_name;
 };
 
 }  // namespace riva

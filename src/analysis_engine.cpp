@@ -29,7 +29,11 @@ AnalysisResult AnalysisEngine::Analyze(const NormalizedTrace& trace) const {
   }
 
   ConfidenceResolver resolver(config_.confidence_resolution);
-  return resolver.Resolve(std::move(raw_findings));
+  auto result = resolver.Resolve(std::move(raw_findings));
+  result.total_frames_analyzed = trace.frame_count();
+  result.hitch_count = spikes.size();
+  result.source_name = trace.source_name();
+  return result;
 }
 
 }  // namespace riva
