@@ -11,6 +11,7 @@
 #include "riva/status.hpp"
 #include "riva/trace_adapter_registry.hpp"
 #include "riva/version.hpp"
+#include "riva/budget.hpp"
 
 namespace {
 
@@ -19,6 +20,7 @@ int PrintUsage() {
             << "Deterministic Unreal Engine performance diagnostics companion.\n\n"
             << "Usage:\n"
             << "  riva analyze <trace_file> [options]\n"
+            << "  riva check-budget --budget <budget_file> --trace <trace_file>\n"
             << "  riva version\n"
             << "  riva --help\n\n"
             << "Options for analyze:\n"
@@ -114,6 +116,74 @@ int RunAnalyze(int argc, char** argv) {
   return 0;
 }
 
+int RunCheckBudget(int argc, char** argv) {
+  std::string budget_path;
+  std::string trace_path;
+
+  for (int i = 2; i < argc; ++i) {
+    const std::string_view arg{argv[i]};
+    if (arg == "--budget") {
+      if (i + 1 >= argc) {
+        std::cerr << "Error: Missing argument for --budget flag.\n";
+        return 2;
+      }
+      budget_path = argv[++i];
+    } else if (arg == "--trace") {
+      if (i + 1 >= argc) {
+        std::cerr << "Error: Missing argument for --trace flag.\n";
+        return 2;
+      }
+      trace_path = argv[++i];
+    } else {
+      std::cerr << "Error: Unknown option '" << arg << "' for check-budget command.\n";
+      return 2;
+    }
+  }
+
+  if (budget_path.empty() || trace_path.empty()) {
+    std::cerr << "Error: --budget and --trace are required for check-budget command.\n\n";
+    PrintUsage();
+    return 2;
+  }
+
+  auto budget_result = riva::LoadBudgetConfigFromJsonFile(budget_path);
+  if (!budget_result.status.ok()) {
+    std::cerr << "Error loading budget '" << budget_path << "': " << budget_result.status.message() << "\n";
+    return 1;
+  }
+
+  riva::TraceAdapterRegistry registry;
+  registry.Register(std::make_unique<riva::JsonTraceAdapter>());
+
+  const auto load_result = registry.Load(trace_path);
+  if (!load_result.status.ok()) {
+    std::cerr << "Error loading trace '" << trace_path << "': " << load_result.status.message() << "\n";
+    return 1;
+  }
+
+  if (!load_result.trace.has_value()) {
+    std::cerr << "Error: Trace adapter returned no data for '" << trace_path << "'.\n";
+    return 1;
+  }
+
+  riva::AnalysisConfig config;
+  config.budget = budget_result.config;
+
+  riva::AnalysisEngine engine(riva::CreateBuiltinSignatures(), std::move(config));
+  const auto analysis_result = engine.Analyze(*load_result.trace);
+
+  if (analysis_result.budget_status.breached) {
+    std::cerr << "Budget check failed! The following metrics exceeded their budget thresholds:\n";
+    for (const auto& metric : analysis_result.budget_status.breached_metrics) {
+      std::cerr << "  - " << metric << "\n";
+    }
+    return 3;
+  }
+
+  std::cout << "Budget check passed.\n";
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -134,6 +204,10 @@ int main(int argc, char** argv) {
 
   if (command == "analyze") {
     return RunAnalyze(argc, argv);
+  }
+
+  if (command == "check-budget") {
+    return RunCheckBudget(argc, argv);
   }
 
   std::cerr << "Unknown command: " << command << "\n\n";

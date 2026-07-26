@@ -11,13 +11,13 @@ namespace {
     std::unique_ptr<riva::AnalysisResult> GLastAnalysisResult = nullptr;
 }
 
-bool FRivaTraceService::LoadAndAnalyzeTrace(const FString& FilePath, TArray<FRivaUiFinding>& OutFindings, FString& OutErrorMessage)
+bool FRivaTraceService::LoadAndAnalyzeTrace(const FString& FilePath, TArray<FRivaUiFinding>& OutFindings, FRivaUiBudgetStatus& OutBudgetStatus, FString& OutErrorMessage)
 {
     if (FilePath.EndsWith(TEXT(".utrace")) || FilePath.EndsWith(TEXT(".utrace.temp")))
     {
-        return LoadAndAnalyzeUTrace(FilePath, OutFindings, OutErrorMessage);
+        return LoadAndAnalyzeUTrace(FilePath, OutFindings, OutBudgetStatus, OutErrorMessage);
     }
-    return LoadAndAnalyzeJsonTrace(FilePath, OutFindings, OutErrorMessage);
+    return LoadAndAnalyzeJsonTrace(FilePath, OutFindings, OutBudgetStatus, OutErrorMessage);
 }
 
 bool FRivaTraceService::ExtractNormalizedTraceFromUTrace(const FString& UTraceFilePath, FRivaNormalizedTraceSummary& OutSummary, FString& OutErrorMessage)
@@ -63,7 +63,7 @@ bool FRivaTraceService::ExtractNormalizedTraceFromUTrace(const FString& UTraceFi
     return true;
 }
 
-bool FRivaTraceService::LoadAndAnalyzeUTrace(const FString& UTraceFilePath, TArray<FRivaUiFinding>& OutFindings, FString& OutErrorMessage)
+bool FRivaTraceService::LoadAndAnalyzeUTrace(const FString& UTraceFilePath, TArray<FRivaUiFinding>& OutFindings, FRivaUiBudgetStatus& OutBudgetStatus, FString& OutErrorMessage)
 {
     FRivaNormalizedTraceSummary Summary;
     if (!ExtractNormalizedTraceFromUTrace(UTraceFilePath, Summary, OutErrorMessage))
@@ -109,9 +109,21 @@ bool FRivaTraceService::LoadAndAnalyzeUTrace(const FString& UTraceFilePath, TArr
         Trace.AddFrame(std::move(Frame));
     }
 
-    riva::AnalysisEngine Engine;
+    riva::AnalysisConfig Config;
+    auto BudgetResult = riva::LoadBudgetConfigFromJsonFile("../../../budgets.json");
+    if (BudgetResult.status.ok() && BudgetResult.config.has_value()) {
+        Config.budget = BudgetResult.config;
+    }
+
+    riva::AnalysisEngine Engine(riva::CreateBuiltinSignatures(), std::move(Config));
     riva::AnalysisResult Result = Engine.Analyze(Trace);
     GLastAnalysisResult = std::make_unique<riva::AnalysisResult>(Result);
+
+    OutBudgetStatus.bBreached = Result.budget_status.breached;
+    OutBudgetStatus.BreachedMetrics.Empty();
+    for (const auto& Metric : Result.budget_status.breached_metrics) {
+        OutBudgetStatus.BreachedMetrics.Add(FString(Metric.c_str()));
+    }
 
     OutFindings.Empty();
     for (const riva::ResolvedFinding& Resolved : Result.findings)
@@ -149,7 +161,7 @@ bool FRivaTraceService::LoadAndAnalyzeUTrace(const FString& UTraceFilePath, TArr
     return true;
 }
 
-bool FRivaTraceService::LoadAndAnalyzeJsonTrace(const FString& JsonFilePath, TArray<FRivaUiFinding>& OutFindings, FString& OutErrorMessage)
+bool FRivaTraceService::LoadAndAnalyzeJsonTrace(const FString& JsonFilePath, TArray<FRivaUiFinding>& OutFindings, FRivaUiBudgetStatus& OutBudgetStatus, FString& OutErrorMessage)
 {
     const std::string StdFilePath = TCHAR_TO_UTF8(*JsonFilePath);
 
@@ -161,9 +173,21 @@ bool FRivaTraceService::LoadAndAnalyzeJsonTrace(const FString& JsonFilePath, TAr
         return false;
     }
 
-    riva::AnalysisEngine Engine;
+    riva::AnalysisConfig Config;
+    auto BudgetResult = riva::LoadBudgetConfigFromJsonFile("../../../budgets.json");
+    if (BudgetResult.status.ok() && BudgetResult.config.has_value()) {
+        Config.budget = BudgetResult.config;
+    }
+
+    riva::AnalysisEngine Engine(riva::CreateBuiltinSignatures(), std::move(Config));
     riva::AnalysisResult Result = Engine.Analyze(LoadResult.GetValue());
     GLastAnalysisResult = std::make_unique<riva::AnalysisResult>(Result);
+
+    OutBudgetStatus.bBreached = Result.budget_status.breached;
+    OutBudgetStatus.BreachedMetrics.Empty();
+    for (const auto& Metric : Result.budget_status.breached_metrics) {
+        OutBudgetStatus.BreachedMetrics.Add(FString(Metric.c_str()));
+    }
 
     OutFindings.Empty();
     for (const riva::ResolvedFinding& Resolved : Result.findings)
@@ -266,11 +290,13 @@ bool FRivaTraceService::ExportLastAnalysisToJson(const FString& OutFilePath, FSt
 
 #if !defined(RIVA_CMAKE_BUILD)
 #include "../../../src/analysis_engine.cpp"
+#include "../../../src/budget.cpp"
 #include "../../../src/builtin_signatures.cpp"
 #include "../../../src/confidence_resolver.cpp"
 #include "../../../src/default_analysis.cpp"
 #include "../../../src/json_trace_adapter.cpp"
 #include "../../../src/json_trace_loader.cpp"
+#include "../../../src/json_utils.cpp"
 #include "../../../src/normalized_trace.cpp"
 #include "../../../src/report_engine.cpp"
 #include "../../../src/signature_result.cpp"

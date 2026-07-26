@@ -10,6 +10,8 @@
 #include "riva/spike_detector.hpp"
 #include "riva/causal_chain_resolver.hpp"
 #include "riva/correlation_resolver.hpp"
+#include "riva/budget.hpp"
+#include <optional>
 
 namespace riva {
 
@@ -18,6 +20,7 @@ struct AnalysisConfig {
   CausalChainResolverConfig causal_chain_resolution;
   ConfidenceResolverConfig confidence_resolution;
   CorrelationResolverConfig correlation_resolution;
+  std::optional<BudgetConfig> budget;
 };
 
 class AnalysisEngine {

@@ -127,6 +127,17 @@ void SRivaPanel::Construct(const FArguments& InArgs)
                             .Text(LOCTEXT("SimulateSyncButton", "Simulate Sync"))
                         ]
                     ]
+
+                    // Budget Status indicator
+                    + SHorizontalBox::Slot()
+                    .FillWidth(1.0f)
+                    .HAlign(HAlign_Right)
+                    .VAlign(VAlign_Center)
+                    [
+                        SAssignNew(BudgetStatusText, STextBlock)
+                        .Text(LOCTEXT("BudgetStatusInit", "Budget: Unknown"))
+                        .ColorAndOpacity(FSlateColor::UseSubduedForeground())
+                    ]
                 ]
             ]
 
@@ -369,22 +380,24 @@ void SRivaPanel::RunAsyncAnalysis(const FString& TracePath)
 #if defined(RIVA_UBT_BUILD)
     Async(EAsyncExecution::ThreadPool, [this, TracePath]() {
         TArray<FRivaUiFinding> ResultFindings;
+        FRivaUiBudgetStatus BudgetStatus;
         FString ErrorMsg;
-        const bool bSuccess = FRivaTraceService::LoadAndAnalyzeTrace(TracePath, ResultFindings, ErrorMsg);
+        const bool bSuccess = FRivaTraceService::LoadAndAnalyzeTrace(TracePath, ResultFindings, BudgetStatus, ErrorMsg);
 
-        Async(EAsyncExecution::TaskGraphMainThread, [this, bSuccess, ResultFindings, ErrorMsg]() {
-            OnAnalysisCompleted(bSuccess, ResultFindings, ErrorMsg);
+        Async(EAsyncExecution::TaskGraphMainThread, [this, bSuccess, ResultFindings, BudgetStatus, ErrorMsg]() {
+            OnAnalysisCompleted(bSuccess, ResultFindings, BudgetStatus, ErrorMsg);
         });
     });
 #else
     TArray<FRivaUiFinding> ResultFindings;
+    FRivaUiBudgetStatus BudgetStatus;
     FString ErrorMsg;
-    const bool bSuccess = FRivaTraceService::LoadAndAnalyzeTrace(TracePath, ResultFindings, ErrorMsg);
-    OnAnalysisCompleted(bSuccess, ResultFindings, ErrorMsg);
+    const bool bSuccess = FRivaTraceService::LoadAndAnalyzeTrace(TracePath, ResultFindings, BudgetStatus, ErrorMsg);
+    OnAnalysisCompleted(bSuccess, ResultFindings, BudgetStatus, ErrorMsg);
 #endif
 }
 
-void SRivaPanel::OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FString& ErrorMessage)
+void SRivaPanel::OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FRivaUiBudgetStatus& BudgetStatus, const FString& ErrorMessage)
 {
     if (bSuccess)
     {
@@ -402,6 +415,20 @@ void SRivaPanel::OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>
         if (FindingsList.Num() > 0 && FindingsListView.IsValid())
         {
             FindingsListView->SetSelection(FindingsList[0]);
+        }
+
+        if (BudgetStatusText.IsValid())
+        {
+            if (BudgetStatus.bBreached)
+            {
+                BudgetStatusText->SetText(FText::Format(LOCTEXT("BudgetBreached", "Budget: BREACHED ({0} metrics)"), FText::AsNumber(BudgetStatus.BreachedMetrics.Num())));
+                BudgetStatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Red));
+            }
+            else
+            {
+                BudgetStatusText->SetText(LOCTEXT("BudgetOk", "Budget: OK (Green)"));
+                BudgetStatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Green));
+            }
         }
     }
     else
