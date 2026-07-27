@@ -10,6 +10,7 @@
 #include "riva/report_engine.hpp"
 #include "riva/status.hpp"
 #include "riva/trace_adapter_registry.hpp"
+#include "riva/trace_comparator.hpp"
 #include "riva/version.hpp"
 #include "riva/budget.hpp"
 
@@ -20,11 +21,14 @@ int PrintUsage() {
             << "Deterministic Unreal Engine performance diagnostics companion.\n\n"
             << "Usage:\n"
             << "  riva analyze <trace_file> [options]\n"
+            << "  riva compare <baseline_trace> <new_trace> [options]\n"
             << "  riva check-budget --budget <budget_file> --trace <trace_file>\n"
             << "  riva version\n"
             << "  riva --help\n\n"
             << "Options for analyze:\n"
             << "  --format, -f <markdown|json>   Report output format (default: markdown)\n"
+            << "  --output, -o <file_path>       Write report to file instead of standard output\n\n"
+            << "Options for compare:\n"
             << "  --output, -o <file_path>       Write report to file instead of standard output\n";
   return 0;
 }
@@ -98,6 +102,85 @@ int RunAnalyze(int argc, char** argv) {
 
   if (!report_status.ok()) {
     std::cerr << "Error generating report: " << report_status.message() << "\n";
+    return 1;
+  }
+
+  if (!output_path.empty()) {
+    std::ofstream out_file(output_path);
+    if (!out_file.is_open()) {
+      std::cerr << "Error: Could not open output file '" << output_path << "' for writing.\n";
+      return 1;
+    }
+    out_file << report_output;
+    out_file.close();
+  } else {
+    std::cout << report_output;
+  }
+
+  return 0;
+}
+
+int RunCompare(int argc, char** argv) {
+  if (argc < 4) {
+    std::cerr << "Error: Missing trace file paths for 'compare' command.\n"
+              << "Usage: riva compare <baseline_trace> <new_trace> [options]\n\n";
+    return 2;
+  }
+
+  std::string baseline_path = argv[2];
+  std::string new_path = argv[3];
+
+  if (baseline_path == "--help" || baseline_path == "-h" || baseline_path == "help") {
+    return PrintUsage();
+  }
+
+  std::string output_path;
+
+  for (int i = 4; i < argc; ++i) {
+    const std::string_view arg{argv[i]};
+    if (arg == "--output" || arg == "-o") {
+      if (i + 1 >= argc) {
+        std::cerr << "Error: Missing argument for " << arg << " flag.\n";
+        return 2;
+      }
+      output_path = argv[++i];
+    } else {
+      std::cerr << "Error: Unknown option '" << arg << "' for compare command.\n";
+      return 2;
+    }
+  }
+
+  riva::TraceAdapterRegistry registry;
+  registry.Register(std::make_unique<riva::JsonTraceAdapter>());
+
+  const auto baseline_load = registry.Load(baseline_path);
+  if (!baseline_load.status.ok() || !baseline_load.trace.has_value()) {
+    std::cerr << "Error loading baseline trace '" << baseline_path << "': "
+              << baseline_load.status.message() << "\n";
+    return 1;
+  }
+
+  const auto new_load = registry.Load(new_path);
+  if (!new_load.status.ok() || !new_load.trace.has_value()) {
+    std::cerr << "Error loading new trace '" << new_path << "': "
+              << new_load.status.message() << "\n";
+    return 1;
+  }
+
+  riva::AnalysisEngine engine(riva::CreateBuiltinSignatures());
+  const auto baseline_result = engine.Analyze(*baseline_load.trace);
+  const auto new_result = engine.Analyze(*new_load.trace);
+
+  riva::DefaultTraceComparator comparator;
+  const auto comparison_result = comparator.Compare(baseline_result, new_result);
+
+  riva::FReportOptions report_options;
+  std::string report_output;
+  const auto report_status = riva::FReportEngine::GenerateComparisonReport(
+      comparison_result, report_options, report_output);
+
+  if (!report_status.ok()) {
+    std::cerr << "Error generating comparison report: " << report_status.message() << "\n";
     return 1;
   }
 
@@ -204,6 +287,10 @@ int main(int argc, char** argv) {
 
   if (command == "analyze") {
     return RunAnalyze(argc, argv);
+  }
+
+  if (command == "compare") {
+    return RunCompare(argc, argv);
   }
 
   if (command == "check-budget") {
