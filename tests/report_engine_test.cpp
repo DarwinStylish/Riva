@@ -6,6 +6,7 @@
 #include "riva/analysis_result.hpp"
 #include "riva/finding.hpp"
 #include "riva/report_engine.hpp"
+#include "riva/trace_comparator.hpp"
 
 namespace {
 
@@ -195,6 +196,47 @@ void TestGenerateReportHelper() {
   Expect(Contains(json_out, "\"executive_summary\""), "Helper should generate valid JSON");
 }
 
+void TestGenerateComparisonReport() {
+  riva::ComparisonResult result;
+  
+  riva::Finding f1;
+  f1.id = "STUT_SHADER_COMPILE";
+  f1.title = "Shader Compilation Stall";
+  f1.severity = riva::Severity::kCritical;
+  f1.confidence = 0.95;
+  f1.frame_index = 10;
+  
+  riva::ResolvedFinding rf1;
+  rf1.finding = f1;
+  rf1.role = riva::FindingRole::kPrimary;
+  result.regressions.push_back(rf1);
+
+  riva::Finding f2;
+  f2.id = "STUT_STREAMING_IO";
+  f2.title = "Streaming IO Stall";
+  f2.severity = riva::Severity::kWarning;
+  f2.confidence = 0.80;
+  f2.frame_index = 15;
+  
+  riva::ResolvedFinding rf2;
+  rf2.finding = f2;
+  rf2.role = riva::FindingRole::kPrimary;
+  result.improvements.push_back(rf2);
+
+  riva::FReportOptions options;
+  std::string markdown;
+  const auto status = riva::FReportEngine::GenerateComparisonReport(result, options, markdown);
+  
+  Expect(status.ok(), "GenerateComparisonReport should succeed");
+  Expect(Contains(markdown, "Trace Comparison"), "Should contain Trace Comparison header");
+  Expect(Contains(markdown, "## Executive Summary"), "Should contain Executive Summary");
+  Expect(Contains(markdown, "- **Regressions**: 1"), "Should report 1 regression");
+  Expect(Contains(markdown, "- **Improvements**: 1"), "Should report 1 improvement");
+  Expect(Contains(markdown, "- **Unchanged**: 0"), "Should report 0 unchanged");
+  Expect(Contains(markdown, "Shader Compilation Stall"), "Should detail regression finding");
+  Expect(Contains(markdown, "Streaming IO Stall"), "Should detail improvement finding");
+}
+
 }  // namespace
 
 int main() {
@@ -203,6 +245,7 @@ int main() {
   TestEmptyFindingsReport();
   TestReportOptionsToggles();
   TestGenerateReportHelper();
+  TestGenerateComparisonReport();
   std::cout << "All report engine tests passed successfully!\n";
   return 0;
 }
