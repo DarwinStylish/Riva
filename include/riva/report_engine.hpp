@@ -4,6 +4,7 @@
 
 #include "riva/analysis_result.hpp"
 #include "riva/status.hpp"
+#include "riva/trace_comparator.hpp"
 
 namespace riva {
 
@@ -36,6 +37,10 @@ class FReportEngine {
   static Status GenerateJsonReport(const AnalysisResult& InResult,
                                    const FReportOptions& InOptions,
                                    std::string& OutJson);
+
+  static Status GenerateComparisonReport(const ComparisonResult& InResult,
+                                         const FReportOptions& InOptions,
+                                         std::string& OutMarkdown);
 };
 
 }  // namespace riva

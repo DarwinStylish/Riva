@@ -12,8 +12,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 
-add_library(riva_core
-  src/analysis_engine.cpp
+add_library(riva_core  src/analysis_engine.cpp
+  src/budget.cpp
   src/builtin_signatures.cpp
   src/causal_chain_resolver.cpp
   src/confidence_resolver.cpp
@@ -21,6 +21,7 @@ add_library(riva_core
   src/default_analysis.cpp
   src/json_trace_adapter.cpp
   src/json_trace_loader.cpp
+  src/json_utils.cpp
   src/normalized_trace.cpp
   src/report_engine.cpp
   src/signature_result.cpp
@@ -97,6 +98,10 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_causal_chain_resolver_tests COMMAND riva_causal_chain_resolver_tests)
+
+  add_executable(riva_budget_tests tests/budget_test.cpp)
+  target_link_libraries(riva_budget_tests PRIVATE riva_core)
+  add_test(NAME riva_budget_tests COMMAND riva_budget_tests)
 
   add_executable(riva_confidence_resolver_tests
     tests/confidence_resolver_test.cpp

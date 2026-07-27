@@ -255,4 +255,87 @@ Status FReportEngine::GenerateJsonReport(const AnalysisResult& InResult,
   return Status::Ok();
 }
 
+Status FReportEngine::GenerateComparisonReport(const ComparisonResult& InResult,
+                                               const FReportOptions& InOptions,
+                                               std::string& OutMarkdown) {
+  std::ostringstream ss;
+
+  if (InOptions.include_metadata) {
+    ss << "# " << InOptions.report_title << " - Trace Comparison\n\n";
+  }
+
+  if (InOptions.include_executive_summary) {
+    ss << "## Executive Summary\n";
+    ss << "- **Regressions**: " << InResult.regressions.size() << "\n";
+    ss << "- **Improvements**: " << InResult.improvements.size() << "\n";
+    ss << "- **Unchanged**: " << InResult.unchanged.size() << "\n\n";
+  }
+
+  auto FormatFindingSection = [&](const std::string& section_title,
+                                  const std::vector<ResolvedFinding>& findings,
+                                  const std::string& empty_msg) {
+    ss << "## " << section_title << "\n\n";
+    if (findings.empty()) {
+      ss << empty_msg << "\n\n";
+      return;
+    }
+
+    std::size_t index = 1;
+    for (const auto& resolved : findings) {
+      const auto& f = resolved.finding;
+      ss << "### " << index++ << ". [" << SeverityToString(f.severity) << "] "
+         << f.title << " (ID: " << f.id << ")\n";
+      ss << "- **Role**: " << RoleToString(resolved.role) << "\n";
+      ss << "- **Confidence**: " << FormatConfidence(f.confidence) << "\n";
+      ss << "- **Frame Index**: " << f.frame_index << "\n";
+      ss << "- **Time Window**: " << f.time_window_start_us << " us - "
+         << f.time_window_end_us << " us\n";
+      if (!resolved.resolution_note.empty()) {
+        ss << "- **Resolution Note**: " << resolved.resolution_note << "\n";
+      }
+      ss << "\n";
+
+      if (InOptions.include_evidence_details && !f.evidence.empty()) {
+        ss << "#### Evidence Breakdown\n";
+        for (const auto& ev : f.evidence) {
+          ss << "- `" << ev.label << "`: " << ev.value << "\n";
+        }
+        ss << "\n";
+      }
+
+      if (InOptions.include_actionable_guidance) {
+        if (!f.suggested_next_steps.empty() || !f.how_to_confirm.empty()) {
+          ss << "#### Actionable Guidance\n";
+          if (!f.suggested_next_steps.empty()) {
+            ss << "- **Suggested Next Steps**:\n";
+            std::size_t step_idx = 1;
+            for (const auto& step : f.suggested_next_steps) {
+              ss << "  " << step_idx++ << ". " << step << "\n";
+            }
+          }
+          if (!f.how_to_confirm.empty()) {
+            ss << "- **How to Confirm in Unreal Insights**:\n";
+            std::size_t step_idx = 1;
+            for (const auto& confirm : f.how_to_confirm) {
+              ss << "  " << step_idx++ << ". " << confirm << "\n";
+            }
+          }
+          ss << "\n";
+        }
+      }
+
+      if (index <= findings.size()) {
+        ss << "---\n\n";
+      }
+    }
+  };
+
+  FormatFindingSection("Regressions", InResult.regressions, "No performance regressions detected.");
+  FormatFindingSection("Improvements", InResult.improvements, "No performance improvements detected.");
+  FormatFindingSection("Unchanged Findings", InResult.unchanged, "No unchanged findings.");
+
+  OutMarkdown = ss.str();
+  return Status::Ok();
+}
+
 }  // namespace riva

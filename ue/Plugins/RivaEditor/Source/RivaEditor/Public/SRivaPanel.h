@@ -13,8 +13,14 @@ struct FRivaUiFinding
     FText Confidence;
     FText TimeWindow;
     FText DetailedReport;
-    double StartTimeMs;
-    double EndTimeMs;
+  double StartTimeMs;
+  double EndTimeMs;
+};
+
+struct FRivaUiBudgetStatus
+{
+    bool bBreached;
+    TArray<FString> BreachedMetrics;
 };
 
 class SRivaPanel : public SCompoundWidget
@@ -26,7 +32,7 @@ public:
     void Construct(const FArguments& InArgs);
     virtual ~SRivaPanel();
 
-    void OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FString& ErrorMessage);
+    void OnAnalysisCompleted(bool bSuccess, const TArray<FRivaUiFinding>& InFindings, const FRivaUiBudgetStatus& BudgetStatus, const FString& ErrorMessage);
 
 private:
     TSharedRef<ITableRow> OnGenerateFindingRow(TSharedPtr<FRivaUiFinding> InItem, const TSharedRef<STableViewBase>& OwnerTable);
@@ -51,6 +57,7 @@ private:
     TSharedPtr<class STextBlock> DetailsTimeWindowText;
     TSharedPtr<class STextBlock> DetailsContentText;
     TSharedPtr<class STextBlock> StatusBarText;
+    TSharedPtr<class STextBlock> BudgetStatusText;
     TSharedPtr<FRivaUiFinding> SelectedFinding;
 
     int32 CurrentSampleIndex;
