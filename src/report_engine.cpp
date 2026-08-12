@@ -44,6 +44,18 @@ std::string RoleToString(FindingRole role) {
   return "Secondary";
 }
 
+std::string EvidenceClassificationToString(EEvidenceClassification classification) {
+  switch (classification) {
+    case EEvidenceClassification::kObserved: return "OBSERVED";
+    case EEvidenceClassification::kDerived: return "DERIVED";
+    case EEvidenceClassification::kCorrelated: return "CORRELATED";
+    case EEvidenceClassification::kInferred: return "INFERRED";
+    case EEvidenceClassification::kSuspected: return "SUSPECTED";
+    case EEvidenceClassification::kRecommended: return "RECOMMENDED";
+  }
+  return "OBSERVED";
+}
+
 std::string FormatConfidence(double confidence) {
   std::ostringstream ss;
   ss << std::fixed << std::setprecision(1) << (confidence * 100.0) << "%";
@@ -102,6 +114,36 @@ Status FReportEngine::GenerateMarkdownReport(const AnalysisResult& InResult,
     ss << "- **Primary Stall Classification**: " << GetPrimaryStallClassification(InResult) << "\n\n";
   }
 
+  // Performance Summary section
+  if (InResult.statistics.total_frames > 0) {
+    ss << "## Performance Summary\n";
+    ss << "- **Overall Score**: " << std::fixed << std::setprecision(0)
+       << InResult.score.overall << " / 100 (" << InResult.score.overall_grade << ")\n";
+    ss << "- **P50**: " << std::setprecision(2) << InResult.statistics.p50_ms
+       << " ms | **P95**: " << InResult.statistics.p95_ms
+       << " ms | **P99**: " << InResult.statistics.p99_ms << " ms\n";
+    ss << "- **Hitch Rate**: " << std::setprecision(1) << InResult.statistics.hitch_percentage
+       << "% (" << InResult.statistics.hitch_count << " of "
+       << InResult.statistics.total_frames << " frames)\n\n";
+
+    if (!InResult.score.subsystems.empty()) {
+      ss << "### Subsystem Scores\n";
+      ss << "| Subsystem | Score | Grade | Notes |\n";
+      ss << "|---|---|---|---|\n";
+      for (const auto& sub : InResult.score.subsystems) {
+        ss << "| " << sub.name << " | " << std::setprecision(0) << sub.score
+           << " | " << sub.grade << " | ";
+        if (sub.deductions.empty()) {
+          ss << "Within budget";
+        } else {
+          ss << sub.deductions[0];
+        }
+        ss << " |\n";
+      }
+      ss << "\n";
+    }
+  }
+
   ss << "## Findings List\n\n";
 
   if (InResult.findings.empty()) {
@@ -117,6 +159,12 @@ Status FReportEngine::GenerateMarkdownReport(const AnalysisResult& InResult,
       ss << "- **Frame Index**: " << f.frame_index << "\n";
       ss << "- **Time Window**: " << f.time_window_start_us << " us - "
          << f.time_window_end_us << " us\n";
+      if (!f.affected_thread.empty()) {
+        ss << "- **Affected Thread**: " << f.affected_thread << "\n";
+      }
+      if (!f.affected_system.empty()) {
+        ss << "- **Affected System**: " << f.affected_system << "\n";
+      }
       if (!resolved.resolution_note.empty()) {
         ss << "- **Resolution Note**: " << resolved.resolution_note << "\n";
       }
@@ -125,7 +173,7 @@ Status FReportEngine::GenerateMarkdownReport(const AnalysisResult& InResult,
       if (InOptions.include_evidence_details && !f.evidence.empty()) {
         ss << "#### Evidence Breakdown\n";
         for (const auto& ev : f.evidence) {
-          ss << "- `" << ev.label << "`: " << ev.value << "\n";
+          ss << "- `" << ev.label << "` [" << EvidenceClassificationToString(ev.classification) << "]: " << ev.value << "\n";
         }
         ss << "\n";
       }
@@ -200,6 +248,8 @@ Status FReportEngine::GenerateJsonReport(const AnalysisResult& InResult,
       ss << "      \"frame_index\": " << f.frame_index << ",\n";
       ss << "      \"time_window_start_us\": " << f.time_window_start_us << ",\n";
       ss << "      \"time_window_end_us\": " << f.time_window_end_us << ",\n";
+      ss << "      \"affected_thread\": \"" << EscapeJsonString(f.affected_thread) << "\",\n";
+      ss << "      \"affected_system\": \"" << EscapeJsonString(f.affected_system) << "\",\n";
       ss << "      \"resolution_note\": \"" << EscapeJsonString(resolved.resolution_note) << "\"";
 
       if (InOptions.include_evidence_details) {
@@ -212,7 +262,8 @@ Status FReportEngine::GenerateJsonReport(const AnalysisResult& InResult,
             const auto& ev = f.evidence[j];
             ss << "        {\n";
             ss << "          \"label\": \"" << EscapeJsonString(ev.label) << "\",\n";
-            ss << "          \"value\": \"" << EscapeJsonString(ev.value) << "\"\n";
+            ss << "          \"value\": \"" << EscapeJsonString(ev.value) << "\",\n";
+            ss << "          \"classification\": \"" << EvidenceClassificationToString(ev.classification) << "\"\n";
             ss << "        }" << (j + 1 < f.evidence.size() ? "," : "") << "\n";
           }
           ss << "      ]";
@@ -251,7 +302,54 @@ Status FReportEngine::GenerateJsonReport(const AnalysisResult& InResult,
   }
 
   ss << "}\n";
-  OutJson = ss.str();
+
+  // Insert statistics and score before closing brace
+  // We need to rebuild the JSON to include these blocks
+  std::string json_str = ss.str();
+  // Find the position before the final closing brace
+  auto close_pos = json_str.rfind('}');
+  if (close_pos != std::string::npos && InResult.statistics.total_frames > 0) {
+    std::ostringstream extra;
+    // We need a comma after the last existing field
+    // Find the content before the closing brace
+    auto before_close = json_str.substr(0, close_pos);
+    // Check if there's content (needs comma)
+    if (!before_close.empty() && before_close.back() != '{' && before_close.back() != ',') {
+      // Remove trailing whitespace to add comma
+      while (!before_close.empty() && (before_close.back() == '\n' || before_close.back() == ' ')) {
+        before_close.pop_back();
+      }
+      before_close += ",\n";
+    }
+    extra << "  \"statistics\": {\n";
+    extra << "    \"p50_ms\": " << std::fixed << std::setprecision(2) << InResult.statistics.p50_ms << ",\n";
+    extra << "    \"p90_ms\": " << InResult.statistics.p90_ms << ",\n";
+    extra << "    \"p95_ms\": " << InResult.statistics.p95_ms << ",\n";
+    extra << "    \"p99_ms\": " << InResult.statistics.p99_ms << ",\n";
+    extra << "    \"min_ms\": " << InResult.statistics.min_ms << ",\n";
+    extra << "    \"max_ms\": " << InResult.statistics.max_ms << ",\n";
+    extra << "    \"mean_ms\": " << InResult.statistics.mean_ms << ",\n";
+    extra << "    \"hitch_count\": " << InResult.statistics.hitch_count << ",\n";
+    extra << "    \"hitch_percentage\": " << std::setprecision(1) << InResult.statistics.hitch_percentage << "\n";
+    extra << "  },\n";
+    extra << "  \"performance_score\": {\n";
+    extra << "    \"overall\": " << std::setprecision(1) << InResult.score.overall << ",\n";
+    extra << "    \"grade\": \"" << InResult.score.overall_grade << "\",\n";
+    extra << "    \"subsystems\": [\n";
+    for (std::size_t i = 0; i < InResult.score.subsystems.size(); ++i) {
+      const auto& sub = InResult.score.subsystems[i];
+      extra << "      {\n";
+      extra << "        \"name\": \"" << EscapeJsonString(sub.name) << "\",\n";
+      extra << "        \"score\": " << std::setprecision(1) << sub.score << ",\n";
+      extra << "        \"grade\": \"" << sub.grade << "\"\n";
+      extra << "      }" << (i + 1 < InResult.score.subsystems.size() ? "," : "") << "\n";
+    }
+    extra << "    ]\n";
+    extra << "  }\n";
+    json_str = before_close + extra.str() + "}\n";
+  }
+
+  OutJson = json_str;
   return Status::Ok();
 }
 
@@ -333,6 +431,61 @@ Status FReportEngine::GenerateComparisonReport(const ComparisonResult& InResult,
   FormatFindingSection("Regressions", InResult.regressions, "No performance regressions detected.");
   FormatFindingSection("Improvements", InResult.improvements, "No performance improvements detected.");
   FormatFindingSection("Unchanged Findings", InResult.unchanged, "No unchanged findings.");
+
+  // Metric Summary table
+  if (!InResult.statistics.metric_deltas.empty()) {
+    ss << "## Metric Summary\n\n";
+    ss << "| Metric | Baseline | New | Delta | Change |\n";
+    ss << "|---|---|---|---|---|\n";
+
+    for (const auto& md : InResult.statistics.metric_deltas) {
+      std::ostringstream baseline_ss;
+      baseline_ss << std::fixed << std::setprecision(2) << md.baseline_value;
+
+      std::ostringstream new_ss;
+      new_ss << std::fixed << std::setprecision(2) << md.new_value;
+
+      std::ostringstream delta_ss;
+      delta_ss << std::fixed << std::setprecision(2);
+      if (md.delta >= 0.0) {
+        delta_ss << "+" << md.delta;
+      } else {
+        delta_ss << md.delta;
+      }
+
+      std::ostringstream pct_ss;
+      pct_ss << std::fixed << std::setprecision(1);
+      if (md.delta_percent >= 0.0) {
+        pct_ss << "+" << md.delta_percent << "%";
+      } else {
+        pct_ss << md.delta_percent << "%";
+      }
+
+      // Determine unit suffix
+      std::string unit = " ms";
+      if (md.metric_name.find("Hitch") != std::string::npos) {
+        unit = "%";
+      }
+
+      // Regression indicator
+      std::string indicator;
+      if (md.bRegressed) {
+        if (md.delta_percent > 25.0) {
+          indicator = " 🔴";
+        } else {
+          indicator = " ⚠️";
+        }
+      }
+
+      ss << "| " << md.metric_name
+         << " | " << baseline_ss.str() << unit
+         << " | " << new_ss.str() << unit
+         << " | " << delta_ss.str() << unit
+         << " | " << pct_ss.str() << indicator
+         << " |\n";
+    }
+    ss << "\n";
+  }
 
   OutMarkdown = ss.str();
   return Status::Ok();

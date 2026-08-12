@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "riva/finding.hpp"
+#include "riva/performance_score.hpp"
+#include "riva/trace_statistics.hpp"
 
 namespace riva {
 
@@ -29,6 +31,8 @@ struct AnalysisResult {
   std::size_t hitch_count{0};
   std::string source_name;
   BudgetStatus budget_status;
+  FTraceStatistics statistics;
+  FPerformanceScore score;
 };
 
 }  // namespace riva
