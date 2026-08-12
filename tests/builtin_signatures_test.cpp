@@ -72,6 +72,13 @@ bool HasFinding(const std::vector<std::unique_ptr<riva::ISignature>>& signatures
     if (!findings.empty()) {
       Expect(!findings[0].how_to_confirm.empty(), "finding must include confirmation guidance");
       Expect(!findings[0].suggested_next_steps.empty(), "finding must include next steps");
+      Expect(!findings[0].affected_system.empty(), "finding must include affected_system");
+      for (const auto& ev : findings[0].evidence) {
+        // Verify classification is not left at an invalid state; it should be kObserved or kDerived
+        Expect(ev.classification == riva::EEvidenceClassification::kObserved ||
+               ev.classification == riva::EEvidenceClassification::kDerived,
+               "evidence classification must be OBSERVED or DERIVED for builtin signatures");
+      }
       return true;
     }
   }
@@ -161,6 +168,52 @@ void TestCpuThreadSignatures() {
          "render thread timing must produce finding");
 }
 
+void TestAffectedFieldsAndEvidenceClassification() {
+  const auto signatures = riva::CreateBuiltinSignatures();
+
+  // Test marker signature (shader compile) sets affected_thread from event
+  {
+    auto trace = MakeTraceWithSpikeEvent("ShaderCompileWorker blocked frame");
+    auto spikes = DetectSpikes(trace);
+    for (const auto& sig : signatures) {
+      if (sig->id() != "STUT_SHADER_COMPILE") continue;
+      const auto findings = sig->Analyze(trace, spikes);
+      Expect(!findings.empty(), "shader compile must produce finding");
+      Expect(findings[0].affected_thread == "GameThread",
+             "shader compile affected_thread must come from event");
+      Expect(findings[0].affected_system == "Rendering",
+             "shader compile affected_system must be Rendering");
+      // Verify delta_ms is classified as kDerived
+      bool found_derived = false;
+      for (const auto& ev : findings[0].evidence) {
+        if (ev.label == "delta_ms") {
+          Expect(ev.classification == riva::EEvidenceClassification::kDerived,
+                 "delta_ms must be classified as DERIVED");
+          found_derived = true;
+        }
+      }
+      Expect(found_derived, "delta_ms evidence must exist");
+      break;
+    }
+  }
+
+  // Test CPU thread signature sets affected_thread directly
+  {
+    auto trace = MakeTraceWithSpikeEvent("generic gameplay spike");
+    auto spikes = DetectSpikes(trace);
+    for (const auto& sig : signatures) {
+      if (sig->id() != "STUT_CPU_GT") continue;
+      const auto findings = sig->Analyze(trace, spikes);
+      Expect(!findings.empty(), "game thread must produce finding");
+      Expect(findings[0].affected_thread == "GameThread",
+             "game thread finding must set affected_thread");
+      Expect(findings[0].affected_system == "CPU",
+             "game thread finding affected_system must be CPU");
+      break;
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -168,5 +221,6 @@ int main() {
   TestBuiltinSignatureCount();
   TestMarkerDrivenSignatures();
   TestCpuThreadSignatures();
+  TestAffectedFieldsAndEvidenceClassification();
   return 0;
 }
