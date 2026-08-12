@@ -18,6 +18,7 @@ struct SignatureRule {
   std::vector<std::string> markers;
   std::vector<std::string> next_steps;
   std::vector<std::string> confirmation_steps;
+  std::string affected_system;
 };
 
 class MarkerSignature final : public ISignature {
@@ -47,9 +48,13 @@ class MarkerSignature final : public ISignature {
       const auto events = EventsInWindow(*context.frame, context.window_start_us, context.window_end_us);
 
       std::vector<Evidence> evidence;
+      std::string detected_thread;
       for (const TraceEvent* event : events) {
         if (event != nullptr && EventMatchesAny(*event, rule_.markers)) {
-          evidence.push_back(Evidence{"event", event->name});
+          evidence.push_back(Evidence{"event", event->name, EEvidenceClassification::kObserved});
+          if (detected_thread.empty() && !event->thread_name.empty()) {
+            detected_thread = event->thread_name;
+          }
         }
       }
 
@@ -57,22 +62,24 @@ class MarkerSignature final : public ISignature {
         continue;
       }
 
-      evidence.push_back(Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms)});
-      evidence.push_back(Evidence{"baseline_ms", FormatMilliseconds(spike.baseline_ms)});
-      evidence.push_back(Evidence{"delta_ms", FormatMilliseconds(spike.delta_ms)});
+      evidence.push_back(Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms), EEvidenceClassification::kObserved});
+      evidence.push_back(Evidence{"baseline_ms", FormatMilliseconds(spike.baseline_ms), EEvidenceClassification::kObserved});
+      evidence.push_back(Evidence{"delta_ms", FormatMilliseconds(spike.delta_ms), EEvidenceClassification::kDerived});
 
-      findings.push_back(Finding{
-          id(),
-          name(),
-          rule_.severity,
-          ClampConfidence(rule_.base_confidence + static_cast<double>(evidence.size()) * 0.03),
-          spike.frame_index,
-          context.window_start_us,
-          context.window_end_us,
-          evidence,
-          rule_.next_steps,
-          rule_.confirmation_steps,
-      });
+      Finding finding;
+      finding.id = id();
+      finding.title = name();
+      finding.severity = rule_.severity;
+      finding.confidence = ClampConfidence(rule_.base_confidence + static_cast<double>(evidence.size()) * 0.03);
+      finding.frame_index = spike.frame_index;
+      finding.time_window_start_us = context.window_start_us;
+      finding.time_window_end_us = context.window_end_us;
+      finding.evidence = evidence;
+      finding.suggested_next_steps = rule_.next_steps;
+      finding.how_to_confirm = rule_.confirmation_steps;
+      finding.affected_thread = detected_thread;
+      finding.affected_system = rule_.affected_system;
+      findings.push_back(std::move(finding));
     }
 
     return findings;
@@ -114,29 +121,31 @@ class CpuThreadSignature final : public ISignature {
         continue;
       }
 
-      findings.push_back(Finding{
-          id(),
-          name(),
-          severity_,
-          ClampConfidence(0.62 + (thread_ms / spike.frame_ms) * 0.25),
-          spike.frame_index,
-          context.window_start_us,
-          context.window_end_us,
-          {
-              Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms)},
-              Evidence{metric_name_, FormatMilliseconds(thread_ms)},
-              Evidence{"baseline_ms", FormatMilliseconds(spike.baseline_ms)},
-          },
-          {
-              "Inspect the CPU timing lane for the affected frame.",
-              "Sort timers by inclusive time in Unreal Insights.",
-              "Compare the spike frame against nearby non-spike frames.",
-          },
-          {
-              "Open the frame in Unreal Insights and verify the dominant CPU timer.",
-              "Check whether the same thread dominates the total frame duration.",
-          },
-      });
+      Finding finding;
+      finding.id = id();
+      finding.title = name();
+      finding.severity = severity_;
+      finding.confidence = ClampConfidence(0.62 + (thread_ms / spike.frame_ms) * 0.25);
+      finding.frame_index = spike.frame_index;
+      finding.time_window_start_us = context.window_start_us;
+      finding.time_window_end_us = context.window_end_us;
+      finding.evidence = {
+          Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms), EEvidenceClassification::kObserved},
+          Evidence{metric_name_, FormatMilliseconds(thread_ms), EEvidenceClassification::kObserved},
+          Evidence{"baseline_ms", FormatMilliseconds(spike.baseline_ms), EEvidenceClassification::kObserved},
+      };
+      finding.suggested_next_steps = {
+          "Inspect the CPU timing lane for the affected frame.",
+          "Sort timers by inclusive time in Unreal Insights.",
+          "Compare the spike frame against nearby non-spike frames.",
+      };
+      finding.how_to_confirm = {
+          "Open the frame in Unreal Insights and verify the dominant CPU timer.",
+          "Check whether the same thread dominates the total frame duration.",
+      };
+      finding.affected_thread = id_ == SignatureId::kCpuGameThread ? "GameThread" : "RenderThread";
+      finding.affected_system = "CPU";
+      findings.push_back(std::move(finding));
     }
 
     return findings;
@@ -184,29 +193,31 @@ class GpuVarianceSignature final : public ISignature {
         continue;
       }
 
-      findings.push_back(Finding{
-          id(),
-          name(),
-          Severity::kWarning,
-          ClampConfidence(has_gpu_marker ? 0.74 : 0.58),
-          spike.frame_index,
-          context.window_start_us,
-          context.window_end_us,
-          {
-              Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms)},
-              Evidence{"gpu_ms", FormatMilliseconds(context.frame->gpu_ms)},
-              Evidence{"baseline_ms", FormatMilliseconds(spike.baseline_ms)},
-          },
-          {
-              "Inspect the GPU track in Unreal Insights.",
-              "Check Lumen, virtual shadow map, and shadow depth passes.",
-              "Compare GPU pass timings against nearby stable frames.",
-          },
-          {
-              "Confirm the spike is GPU-bound in Unreal Insights.",
-              "Verify whether Lumen or virtual shadow map passes expand in the spike window.",
-          },
-      });
+      Finding finding;
+      finding.id = id();
+      finding.title = name();
+      finding.severity = Severity::kWarning;
+      finding.confidence = ClampConfidence(has_gpu_marker ? 0.74 : 0.58);
+      finding.frame_index = spike.frame_index;
+      finding.time_window_start_us = context.window_start_us;
+      finding.time_window_end_us = context.window_end_us;
+      finding.evidence = {
+          Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms), EEvidenceClassification::kObserved},
+          Evidence{"gpu_ms", FormatMilliseconds(context.frame->gpu_ms), EEvidenceClassification::kObserved},
+          Evidence{"baseline_ms", FormatMilliseconds(spike.baseline_ms), EEvidenceClassification::kObserved},
+      };
+      finding.suggested_next_steps = {
+          "Inspect the GPU track in Unreal Insights.",
+          "Check Lumen, virtual shadow map, and shadow depth passes.",
+          "Compare GPU pass timings against nearby stable frames.",
+      };
+      finding.how_to_confirm = {
+          "Confirm the spike is GPU-bound in Unreal Insights.",
+          "Verify whether Lumen or virtual shadow map passes expand in the spike window.",
+      };
+      finding.affected_thread = "GPU";
+      finding.affected_system = "Rendering";
+      findings.push_back(std::move(finding));
     }
 
     return findings;
@@ -236,6 +247,7 @@ std::vector<std::unique_ptr<ISignature>> CreateBuiltinSignatures() {
           "Open the spike window in Unreal Insights and inspect shader compilation markers.",
           "Check whether shader worker activity overlaps the frame hitch.",
       },
+      "Rendering",
   }));
 
   signatures.push_back(MakeMarkerSignature(SignatureRule{
@@ -252,6 +264,7 @@ std::vector<std::unique_ptr<ISignature>> CreateBuiltinSignatures() {
           "Open the RHI and rendering tracks in Unreal Insights.",
           "Look for PSO creation or pipeline state compilation overlapping the hitch.",
       },
+      "Rendering",
   }));
 
   signatures.push_back(MakeMarkerSignature(SignatureRule{
@@ -268,6 +281,7 @@ std::vector<std::unique_ptr<ISignature>> CreateBuiltinSignatures() {
           "Open loading, file IO, or streaming markers in Unreal Insights.",
           "Confirm whether asset loading overlaps the spike time window.",
       },
+      "Loading",
   }));
 
   signatures.push_back(std::make_unique<CpuThreadSignature>(
@@ -294,6 +308,7 @@ std::vector<std::unique_ptr<ISignature>> CreateBuiltinSignatures() {
           "Open RHI thread markers in Unreal Insights.",
           "Confirm whether synchronization waits overlap the spike frame.",
       },
+      "Rendering",
   }));
 
   signatures.push_back(MakeMarkerSignature(SignatureRule{
@@ -310,6 +325,7 @@ std::vector<std::unique_ptr<ISignature>> CreateBuiltinSignatures() {
           "Open GC markers in Unreal Insights.",
           "Confirm mark, sweep, or purge work overlaps the spike window.",
       },
+      "Memory",
   }));
 
   signatures.push_back(std::make_unique<GpuVarianceSignature>());

@@ -27,7 +27,14 @@ riva analyze <trace_file> [options]
 # Output Markdown report to stdout
 ./build/riva analyze samples/spike_shader_compile.json
 
-# Save JSON report to file
+# Example Output Snippet:
+# ## Performance Summary
+# - **Overall Score**: 38 / 100 (F)
+# - **P50**: 16.20 ms | **P95**: 44.82 ms | **P99**: 47.36 ms
+# - **Hitch Rate**: 33.3% (1 of 3 frames)
+
+
+# Save JSON report to file (includes 'statistics' and 'performance_score' blocks)
 ./build/riva analyze samples/spike_shader_compile.json --format json --output report.json
 ```
 
@@ -77,7 +84,7 @@ Prints product name and version number.
 
 ```bash
 ./build/riva version
-# Output: Riva 0.1.0
+# Output: Riva 0.2.0
 ```
 
 ---

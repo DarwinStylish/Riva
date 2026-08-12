@@ -3,7 +3,7 @@
 namespace riva {
 
 std::string_view Version() noexcept {
-  return "0.1.0";
+  return "0.2.0";
 }
 
 std::string_view ProductName() noexcept {

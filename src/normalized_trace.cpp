@@ -1,5 +1,6 @@
 #include "riva/normalized_trace.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace riva {
@@ -33,6 +34,41 @@ Status NormalizedTrace::AddFrame(Frame frame) {
   }
 
   frames_.push_back(std::move(frame));
+  return Status::Ok();
+}
+
+void NormalizedTrace::SetBuildInfo(FBuildInfo InBuildInfo) {
+  build_info_ = std::move(InBuildInfo);
+}
+
+void NormalizedTrace::SetScenarioInfo(FScenarioInfo InScenarioInfo) {
+  scenario_info_ = std::move(InScenarioInfo);
+}
+
+const FBuildInfo& NormalizedTrace::build_info() const noexcept {
+  return build_info_;
+}
+
+const FScenarioInfo& NormalizedTrace::scenario_info() const noexcept {
+  return scenario_info_;
+}
+
+const std::vector<FTraceThread>& NormalizedTrace::threads() const noexcept {
+  return threads_;
+}
+
+Status NormalizedTrace::AddThread(FTraceThread InThread) {
+  const auto it = std::find_if(
+      threads_.begin(), threads_.end(),
+      [&InThread](const FTraceThread& existing) {
+        return existing.id == InThread.id;
+      });
+
+  if (it != threads_.end()) {
+    return Status(StatusCode::kInvalidArgument, "duplicate thread id: " + std::to_string(InThread.id));
+  }
+
+  threads_.push_back(std::move(InThread));
   return Status::Ok();
 }
 

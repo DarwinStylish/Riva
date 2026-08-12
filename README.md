@@ -7,10 +7,12 @@
 ## Features
 
 - **Deterministic Diagnostics Engine**: Rolling median spike detection with zero non-deterministic heuristics.
+- **Performance Scoring System**: Deterministic 0-100 grading with A-F letter grades and per-subsystem breakdowns (Game Thread, Render Thread, GPU, Physics, AI, Network).
+- **Quantitative Trace Comparison**: Diffs baseline vs. new trace runs and generates Metric Summary tables with P50/P90/P95/P99 deltas and hitch % regressions.
+- **Synthetic Telemetry Generation**: Built-in pathology generator to programmatically inject frame spikes (shader compile, PSO miss, GC, etc.) for testing and ground-truth validation.
 - **Root Cause & Causal Resolution**: Automatically links concurrent stalls (e.g. streaming IO or GC triggering Game Thread / RHI waits) and elevates root causes over symptomatic stalls.
 - **Multi-Spike Correlation**: Groups repetitive hitches into composite findings to prevent UI clutter.
-- **Trace Comparison & Diffing**: Structurally diffs baseline vs. new trace runs to identify regressions, resolved issues, and persistent findings.
-- **Performance Budgets**: Enforces strict frame-time constraints (`game_thread_ms`, `render_thread_ms`, `rhi_thread_ms`, `gpu_ms`, `duration_ms`) in CI/CD pipelines.
+- **Performance Budgets**: Enforces strict frame-time constraints in CI/CD pipelines.
 - **Unreal Editor Plugin**: Native Slate companion tab (`SRivaPanel`) with non-blocking async analysis, bidirectional Unreal Insights selection synchronization, clipboard copy, and report export dialogs.
 - **Headless CLI Gatekeeper**: Pure C++20 executable (`riva`) with zero Unreal Engine dependencies for instant, lightweight automated testing.
 
@@ -36,10 +38,14 @@ graph TD
         TC["TraceComparator"]
         BE["BudgetEvaluator"]
         RE["ReportEngine"]
+        TSy["TraceSynthesizer"]
+        PS["PerformanceScore"]
         
         AE --> NT
+        AE --> PS
         TC --> AE
         RE --> AE
+        TSy --> NT
     end
 
     TS -->|Ingests .utrace| NT
@@ -73,7 +79,7 @@ cmake -S . -B build
 # Build targets
 cmake --build build -j
 
-# Run full CTest suite (13 test executables)
+# Run full CTest suite (17 test executables)
 ctest --test-dir build --output-on-failure
 ```
 
@@ -113,4 +119,4 @@ ctest --test-dir build --output-on-failure
 
 ## License
 
-Riva is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Riva is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.

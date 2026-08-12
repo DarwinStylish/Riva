@@ -122,6 +122,64 @@ namespace {
   return Status::Ok();
 }
 
+[[nodiscard]] Status ParseCounter(
+    const JsonValue& counter_value,
+    FTraceCounter& counter,
+    const JsonTraceLoaderOptions& options) {
+  if (counter_value.type != JsonValue::Type::kObject) {
+    return Status(StatusCode::kInvalidArgument, "counter must be an object");
+  }
+
+  auto status = StrictKeys(
+      counter_value,
+      {"name", "category", "unit", "timestamp_us", "value"},
+      "counter",
+      options.allow_unknown_fields);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const JsonValue* name = FindField(counter_value, "name");
+  const JsonValue* value = FindField(counter_value, "value");
+
+  status = RequireType(name, JsonValue::Type::kString, "counter.name");
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = RequireType(value, JsonValue::Type::kNumber, "counter.value");
+  if (!status.ok()) {
+    return status;
+  }
+
+  counter.name = name->string_value;
+  counter.value = value->number_value;
+
+  status = ReadOptionalString(counter_value, "category", counter.category);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalString(counter_value, "unit", counter.unit);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const JsonValue* timestamp = FindField(counter_value, "timestamp_us");
+  if (timestamp != nullptr) {
+    status = RequireType(timestamp, JsonValue::Type::kNumber, "counter.timestamp_us");
+    if (!status.ok()) {
+      return status;
+    }
+    status = NumberToUint64(timestamp->number_value, counter.timestamp_us, "counter.timestamp_us");
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  return Status::Ok();
+}
+
 [[nodiscard]] Status ParseFrame(
     const JsonValue& frame_value,
     Frame& frame,
@@ -133,7 +191,8 @@ namespace {
   auto status = StrictKeys(
       frame_value,
       {"index", "start_time_us", "duration_ms", "game_thread_ms", "render_thread_ms",
-       "rhi_thread_ms", "gpu_ms", "events"},
+       "rhi_thread_ms", "gpu_ms", "physics_ms", "ai_ms", "network_ms", "loading_ms",
+       "memory_bytes", "events", "counters"},
       "frame",
       options.allow_unknown_fields);
   if (!status.ok()) {
@@ -191,23 +250,242 @@ namespace {
     return status;
   }
 
+  status = ReadOptionalNumber(frame_value, "physics_ms", frame.physics_ms);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalNumber(frame_value, "ai_ms", frame.ai_ms);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalNumber(frame_value, "network_ms", frame.network_ms);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalNumber(frame_value, "loading_ms", frame.loading_ms);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalNumber(frame_value, "memory_bytes", frame.memory_bytes);
+  if (!status.ok()) {
+    return status;
+  }
+
+  // Parse events
   const JsonValue* events = FindField(frame_value, "events");
-  if (events == nullptr) {
-    return Status::Ok();
-  }
-
-  if (events->type != JsonValue::Type::kArray) {
-    return Status(StatusCode::kInvalidArgument, "frame.events must be an array");
-  }
-
-  for (const auto& event_value : events->array_value) {
-    TraceEvent event;
-    status = ParseEvent(event_value, event, options);
-    if (!status.ok()) {
-      return status;
+  if (events != nullptr) {
+    if (events->type != JsonValue::Type::kArray) {
+      return Status(StatusCode::kInvalidArgument, "frame.events must be an array");
     }
 
-    frame.events.push_back(std::move(event));
+    for (const auto& event_value : events->array_value) {
+      TraceEvent event;
+      status = ParseEvent(event_value, event, options);
+      if (!status.ok()) {
+        return status;
+      }
+
+      frame.events.push_back(std::move(event));
+    }
+  }
+
+  // Parse counters
+  const JsonValue* counters = FindField(frame_value, "counters");
+  if (counters != nullptr) {
+    if (counters->type != JsonValue::Type::kArray) {
+      return Status(StatusCode::kInvalidArgument, "frame.counters must be an array");
+    }
+
+    for (const auto& counter_value : counters->array_value) {
+      FTraceCounter counter;
+      status = ParseCounter(counter_value, counter, options);
+      if (!status.ok()) {
+        return status;
+      }
+
+      frame.counters.push_back(std::move(counter));
+    }
+  }
+
+  return Status::Ok();
+}
+
+[[nodiscard]] Status ParseBuildInfo(
+    const JsonValue& build_value,
+    FBuildInfo& build_info,
+    const JsonTraceLoaderOptions& options) {
+  if (build_value.type != JsonValue::Type::kObject) {
+    return Status(StatusCode::kInvalidArgument, "build_info must be an object");
+  }
+
+  auto status = StrictKeys(
+      build_value,
+      {"build_id", "version", "branch", "commit", "configuration", "platform",
+       "engine_version", "timestamp"},
+      "build_info",
+      options.allow_unknown_fields);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalString(build_value, "build_id", build_info.build_id);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(build_value, "version", build_info.version);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(build_value, "branch", build_info.branch);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(build_value, "commit", build_info.commit);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(build_value, "configuration", build_info.configuration);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(build_value, "platform", build_info.platform);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(build_value, "engine_version", build_info.engine_version);
+  if (!status.ok()) return status;
+
+  const JsonValue* timestamp = FindField(build_value, "timestamp");
+  if (timestamp != nullptr) {
+    status = RequireType(timestamp, JsonValue::Type::kNumber, "build_info.timestamp");
+    if (!status.ok()) return status;
+    status = NumberToUint64(timestamp->number_value, build_info.timestamp, "build_info.timestamp");
+    if (!status.ok()) return status;
+  }
+
+  return Status::Ok();
+}
+
+[[nodiscard]] Status ParseScenarioInfo(
+    const JsonValue& scenario_value,
+    FScenarioInfo& scenario_info,
+    const JsonTraceLoaderOptions& options) {
+  if (scenario_value.type != JsonValue::Type::kObject) {
+    return Status(StatusCode::kInvalidArgument, "scenario_info must be an object");
+  }
+
+  auto status = StrictKeys(
+      scenario_value,
+      {"scenario_id", "name", "map_name", "gameplay_state", "player_count", "agent_count"},
+      "scenario_info",
+      options.allow_unknown_fields);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = ReadOptionalString(scenario_value, "scenario_id", scenario_info.scenario_id);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(scenario_value, "name", scenario_info.name);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(scenario_value, "map_name", scenario_info.map_name);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalString(scenario_value, "gameplay_state", scenario_info.gameplay_state);
+  if (!status.ok()) return status;
+
+  const JsonValue* player_count = FindField(scenario_value, "player_count");
+  if (player_count != nullptr) {
+    status = RequireType(player_count, JsonValue::Type::kNumber, "scenario_info.player_count");
+    if (!status.ok()) return status;
+    std::size_t count = 0;
+    status = NumberToSize(player_count->number_value, count, "scenario_info.player_count");
+    if (!status.ok()) return status;
+    scenario_info.player_count = static_cast<std::uint32_t>(count);
+  }
+
+  const JsonValue* agent_count = FindField(scenario_value, "agent_count");
+  if (agent_count != nullptr) {
+    status = RequireType(agent_count, JsonValue::Type::kNumber, "scenario_info.agent_count");
+    if (!status.ok()) return status;
+    std::size_t count = 0;
+    status = NumberToSize(agent_count->number_value, count, "scenario_info.agent_count");
+    if (!status.ok()) return status;
+    scenario_info.agent_count = static_cast<std::uint32_t>(count);
+  }
+
+  return Status::Ok();
+}
+
+[[nodiscard]] Status ParseThread(
+    const JsonValue& thread_value,
+    FTraceThread& thread,
+    const JsonTraceLoaderOptions& options) {
+  if (thread_value.type != JsonValue::Type::kObject) {
+    return Status(StatusCode::kInvalidArgument, "thread must be an object");
+  }
+
+  auto status = StrictKeys(
+      thread_value,
+      {"id", "name", "type", "core_affinity", "utilization", "total_active_us", "total_wait_us"},
+      "thread",
+      options.allow_unknown_fields);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const JsonValue* id = FindField(thread_value, "id");
+  status = RequireType(id, JsonValue::Type::kNumber, "thread.id");
+  if (!status.ok()) return status;
+  status = NumberToSize(id->number_value, thread.id, "thread.id");
+  if (!status.ok()) return status;
+
+  const JsonValue* name = FindField(thread_value, "name");
+  status = RequireType(name, JsonValue::Type::kString, "thread.name");
+  if (!status.ok()) return status;
+  thread.name = name->string_value;
+
+  // Parse optional thread type string
+  std::string type_str;
+  status = ReadOptionalString(thread_value, "type", type_str);
+  if (!status.ok()) return status;
+
+  if (type_str == "GameThread") {
+    thread.type = EThreadType::kGameThread;
+  } else if (type_str == "RenderThread") {
+    thread.type = EThreadType::kRenderThread;
+  } else if (type_str == "RhiThread") {
+    thread.type = EThreadType::kRhiThread;
+  } else if (type_str == "WorkerThread") {
+    thread.type = EThreadType::kWorkerThread;
+  } else if (type_str == "AudioThread") {
+    thread.type = EThreadType::kAudioThread;
+  } else if (type_str == "LoadingThread") {
+    thread.type = EThreadType::kLoadingThread;
+  } else if (type_str == "NetworkThread") {
+    thread.type = EThreadType::kNetworkThread;
+  } else {
+    thread.type = EThreadType::kCustom;
+  }
+
+  double utilization = 0.0;
+  status = ReadOptionalNumber(thread_value, "utilization", utilization);
+  if (!status.ok()) return status;
+  thread.utilization = utilization;
+
+  status = ReadOptionalNumber(thread_value, "total_active_us", thread.total_active_us);
+  if (!status.ok()) return status;
+
+  status = ReadOptionalNumber(thread_value, "total_wait_us", thread.total_wait_us);
+  if (!status.ok()) return status;
+
+  const JsonValue* core_affinity = FindField(thread_value, "core_affinity");
+  if (core_affinity != nullptr) {
+    status = RequireType(core_affinity, JsonValue::Type::kNumber, "thread.core_affinity");
+    if (!status.ok()) return status;
+    std::size_t affinity = 0;
+    status = NumberToSize(core_affinity->number_value, affinity, "thread.core_affinity");
+    if (!status.ok()) return status;
+    thread.core_affinity = static_cast<std::uint32_t>(affinity);
   }
 
   return Status::Ok();
@@ -235,7 +513,9 @@ JsonTraceLoadResult LoadNormalizedTraceFromJsonText(
     };
   }
 
-  auto status = StrictKeys(root, {"source_name", "frames"}, "root", options.allow_unknown_fields);
+  auto status = StrictKeys(root,
+      {"source_name", "frames", "build_info", "scenario_info", "threads"},
+      "root", options.allow_unknown_fields);
   if (!status.ok()) {
     return JsonTraceLoadResult{status, std::nullopt};
   }
@@ -255,6 +535,50 @@ JsonTraceLoadResult LoadNormalizedTraceFromJsonText(
 
   NormalizedTrace trace(source_name->string_value);
 
+  // Parse optional build_info
+  const JsonValue* build_info = FindField(root, "build_info");
+  if (build_info != nullptr) {
+    FBuildInfo info;
+    status = ParseBuildInfo(*build_info, info, options);
+    if (!status.ok()) {
+      return JsonTraceLoadResult{status, std::nullopt};
+    }
+    trace.SetBuildInfo(std::move(info));
+  }
+
+  // Parse optional scenario_info
+  const JsonValue* scenario_info = FindField(root, "scenario_info");
+  if (scenario_info != nullptr) {
+    FScenarioInfo info;
+    status = ParseScenarioInfo(*scenario_info, info, options);
+    if (!status.ok()) {
+      return JsonTraceLoadResult{status, std::nullopt};
+    }
+    trace.SetScenarioInfo(std::move(info));
+  }
+
+  // Parse optional threads
+  const JsonValue* threads = FindField(root, "threads");
+  if (threads != nullptr) {
+    if (threads->type != JsonValue::Type::kArray) {
+      return JsonTraceLoadResult{
+          Status(StatusCode::kInvalidArgument, "threads must be an array"),
+          std::nullopt};
+    }
+    for (const auto& thread_value : threads->array_value) {
+      FTraceThread thread;
+      status = ParseThread(thread_value, thread, options);
+      if (!status.ok()) {
+        return JsonTraceLoadResult{status, std::nullopt};
+      }
+      status = trace.AddThread(std::move(thread));
+      if (!status.ok()) {
+        return JsonTraceLoadResult{status, std::nullopt};
+      }
+    }
+  }
+
+  // Parse frames
   for (const auto& frame_value : frames->array_value) {
     Frame frame;
     status = ParseFrame(frame_value, frame, options);

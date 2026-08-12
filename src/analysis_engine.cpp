@@ -4,6 +4,9 @@
 #include <utility>
 #include <vector>
 
+#include "riva/performance_score.hpp"
+#include "riva/trace_statistics.hpp"
+
 namespace riva {
 
 AnalysisEngine::AnalysisEngine(std::vector<std::unique_ptr<ISignature>> signatures,
@@ -75,6 +78,10 @@ AnalysisResult AnalysisEngine::Analyze(const NormalizedTrace& trace) const {
 
     result.budget_status.breached = !result.budget_status.breached_metrics.empty();
   }
+
+  // Compute trace statistics and performance score
+  result.statistics = ComputeTraceStatistics(trace);
+  result.score = ComputePerformanceScore(result.statistics);
 
   return result;
 }

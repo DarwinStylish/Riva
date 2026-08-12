@@ -35,9 +35,11 @@ riva::AnalysisResult MakeSampleResult() {
   f1.frame_index = 42;
   f1.time_window_start_us = 672000;
   f1.time_window_end_us = 722000;
-  f1.evidence.push_back(riva::Evidence{"gpu_ms", "50.00 ms"});
+  f1.evidence.push_back(riva::Evidence{"gpu_ms", "50.00 ms", riva::EEvidenceClassification::kObserved});
   f1.suggested_next_steps.push_back("Check GPU pass breakdown in Unreal Insights.");
   f1.how_to_confirm.push_back("Verify GPU timing lane exceeds 33ms threshold.");
+  f1.affected_thread = "GPU";
+  f1.affected_system = "Rendering";
 
   riva::ResolvedFinding rf1;
   rf1.finding = f1;
@@ -53,9 +55,11 @@ riva::AnalysisResult MakeSampleResult() {
   f2.frame_index = 42;
   f2.time_window_start_us = 675000;
   f2.time_window_end_us = 680000;
-  f2.evidence.push_back(riva::Evidence{"gc_ms", "5.00 ms"});
+  f2.evidence.push_back(riva::Evidence{"gc_ms", "5.00 ms", riva::EEvidenceClassification::kDerived});
   f2.suggested_next_steps.push_back("Check UObject allocation rate.");
   f2.how_to_confirm.push_back("Look for GarbageCollect event on GameThread.");
+  f2.affected_thread = "GameThread";
+  f2.affected_system = "Memory";
 
   riva::ResolvedFinding rf2;
   rf2.finding = f2;
@@ -92,7 +96,9 @@ void TestMarkdownReportWithFindings() {
   Expect(Contains(markdown, "- **Resolution Note**: Selected as primary bottleneck."), "Should include resolution note");
 
   Expect(Contains(markdown, "#### Evidence Breakdown"), "Should contain Evidence Breakdown");
-  Expect(Contains(markdown, "- `gpu_ms`: 50.00 ms"), "Should format evidence item");
+  Expect(Contains(markdown, "- `gpu_ms` [OBSERVED]: 50.00 ms"), "Should format evidence item with classification");
+  Expect(Contains(markdown, "- **Affected Thread**: GPU"), "Should contain affected thread in Markdown");
+  Expect(Contains(markdown, "- **Affected System**: Rendering"), "Should contain affected system in Markdown");
 
   Expect(Contains(markdown, "#### Actionable Guidance"), "Should contain Actionable Guidance");
   Expect(Contains(markdown, "- **Suggested Next Steps**:"), "Should contain Suggested Next Steps");
@@ -126,6 +132,9 @@ void TestJsonReportWithFindings() {
   Expect(Contains(json, "\"evidence\": ["), "Should contain evidence array in JSON");
   Expect(Contains(json, "\"label\": \"gpu_ms\""), "Should contain evidence label in JSON");
   Expect(Contains(json, "\"value\": \"50.00 ms\""), "Should contain evidence value in JSON");
+  Expect(Contains(json, "\"classification\": \"OBSERVED\""), "Should contain evidence classification in JSON");
+  Expect(Contains(json, "\"affected_thread\": \"GPU\""), "Should contain affected_thread in JSON");
+  Expect(Contains(json, "\"affected_system\": \"Rendering\""), "Should contain affected_system in JSON");
   Expect(Contains(json, "\"how_to_confirm\": ["), "Should contain how_to_confirm array in JSON");
   Expect(Contains(json, "\"Verify GPU timing lane exceeds 33ms threshold.\""), "Should contain confirm string in JSON");
 }
@@ -237,6 +246,120 @@ void TestGenerateComparisonReport() {
   Expect(Contains(markdown, "Streaming IO Stall"), "Should detail improvement finding");
 }
 
+void TestComparisonReportMetricSummary() {
+  riva::ComparisonResult result;
+
+  // Populate metric deltas
+  riva::FMetricDelta p50;
+  p50.metric_name = "P50 Frame Time";
+  p50.baseline_value = 16.0;
+  p50.new_value = 20.0;
+  p50.delta = 4.0;
+  p50.delta_percent = 25.0;
+  p50.bRegressed = true;
+  result.statistics.metric_deltas.push_back(p50);
+
+  riva::FMetricDelta hitch;
+  hitch.metric_name = "Hitch %";
+  hitch.baseline_value = 2.0;
+  hitch.new_value = 8.0;
+  hitch.delta = 6.0;
+  hitch.delta_percent = 300.0;
+  hitch.bRegressed = true;
+  result.statistics.metric_deltas.push_back(hitch);
+
+  riva::FReportOptions options;
+  std::string markdown;
+  const auto status = riva::FReportEngine::GenerateComparisonReport(result, options, markdown);
+
+  Expect(status.ok(), "Metric summary report should succeed");
+  Expect(Contains(markdown, "## Metric Summary"), "Should contain Metric Summary header");
+  Expect(Contains(markdown, "| Metric | Baseline | New | Delta | Change |"),
+         "Should contain table header");
+  Expect(Contains(markdown, "P50 Frame Time"), "Should contain P50 metric name");
+  Expect(Contains(markdown, "16.00 ms"), "Should contain baseline value");
+  Expect(Contains(markdown, "20.00 ms"), "Should contain new value");
+  Expect(Contains(markdown, "+4.00 ms"), "Should contain delta value");
+  Expect(Contains(markdown, "Hitch %"), "Should contain Hitch metric");
+}
+
+void TestPerformanceSummaryInMarkdown() {
+  riva::AnalysisResult result;
+  result.total_frames_analyzed = 100;
+  result.source_name = "perf-summary-test";
+
+  // Populate statistics
+  result.statistics.total_frames = 100;
+  result.statistics.p50_ms = 15.5;
+  result.statistics.p95_ms = 22.3;
+  result.statistics.p99_ms = 35.0;
+  result.statistics.hitch_count = 3;
+  result.statistics.hitch_percentage = 3.0;
+
+  // Populate score
+  result.score.overall = 78.0;
+  result.score.overall_grade = "C";
+  riva::FSubsystemScore gt;
+  gt.name = "Game Thread";
+  gt.score = 72;
+  gt.grade = "C";
+  gt.deductions.push_back("P95 exceeds target by 5.6 ms");
+  result.score.subsystems.push_back(gt);
+
+  riva::FReportOptions options;
+  std::string markdown;
+  const auto status = riva::FReportEngine::GenerateMarkdownReport(result, options, markdown);
+
+  Expect(status.ok(), "performance summary markdown should succeed");
+  Expect(Contains(markdown, "## Performance Summary"), "Should contain Performance Summary header");
+  Expect(Contains(markdown, "78 / 100 (C)"), "Should contain overall score and grade");
+  Expect(Contains(markdown, "15.50 ms"), "Should contain P50 value");
+  Expect(Contains(markdown, "22.30 ms"), "Should contain P95 value");
+  Expect(Contains(markdown, "3.0%"), "Should contain hitch percentage");
+  Expect(Contains(markdown, "3 of 100 frames"), "Should contain hitch count context");
+  Expect(Contains(markdown, "### Subsystem Scores"), "Should contain subsystem table header");
+  Expect(Contains(markdown, "Game Thread"), "Should contain subsystem name");
+  Expect(Contains(markdown, "P95 exceeds target"), "Should contain deduction note");
+}
+
+void TestStatisticsAndScoreInJson() {
+  riva::AnalysisResult result;
+  result.total_frames_analyzed = 50;
+  result.source_name = "json-stats-test";
+
+  result.statistics.total_frames = 50;
+  result.statistics.p50_ms = 16.0;
+  result.statistics.p95_ms = 18.0;
+  result.statistics.p99_ms = 20.0;
+  result.statistics.hitch_count = 0;
+  result.statistics.hitch_percentage = 0.0;
+  result.statistics.min_ms = 14.0;
+  result.statistics.max_ms = 20.0;
+  result.statistics.mean_ms = 15.8;
+
+  result.score.overall = 95.0;
+  result.score.overall_grade = "A";
+  riva::FSubsystemScore gpu;
+  gpu.name = "GPU";
+  gpu.score = 92.0;
+  gpu.grade = "A";
+  result.score.subsystems.push_back(gpu);
+
+  riva::FReportOptions options;
+  std::string json;
+  const auto status = riva::FReportEngine::GenerateJsonReport(result, options, json);
+
+  Expect(status.ok(), "json stats/score should succeed");
+  Expect(Contains(json, "\"statistics\""), "JSON should contain statistics block");
+  Expect(Contains(json, "\"p50_ms\""), "JSON should contain p50_ms");
+  Expect(Contains(json, "\"p95_ms\""), "JSON should contain p95_ms");
+  Expect(Contains(json, "\"hitch_count\""), "JSON should contain hitch_count");
+  Expect(Contains(json, "\"performance_score\""), "JSON should contain performance_score block");
+  Expect(Contains(json, "\"overall\""), "JSON should contain overall score");
+  Expect(Contains(json, "\"grade\": \"A\""), "JSON should contain grade A");
+  Expect(Contains(json, "\"GPU\""), "JSON should contain GPU subsystem");
+}
+
 }  // namespace
 
 int main() {
@@ -246,6 +369,9 @@ int main() {
   TestReportOptionsToggles();
   TestGenerateReportHelper();
   TestGenerateComparisonReport();
+  TestComparisonReportMetricSummary();
+  TestPerformanceSummaryInMarkdown();
+  TestStatisticsAndScoreInJson();
   std::cout << "All report engine tests passed successfully!\n";
   return 0;
 }

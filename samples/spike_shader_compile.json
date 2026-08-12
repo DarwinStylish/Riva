@@ -1,5 +1,20 @@
 {
   "source_name": "spike_shader_compile_sample",
+  "build_info": {
+    "build_id": "B-2847",
+    "version": "0.2.0",
+    "branch": "feat/nanite-foliage",
+    "commit": "a1b2c3d",
+    "configuration": "Development",
+    "platform": "Win64",
+    "engine_version": "5.5.1",
+    "timestamp": 1722096000
+  },
+  "scenario_info": {
+    "scenario_id": "forest-flythrough",
+    "name": "Forest Flythrough Benchmark",
+    "map_name": "ForestBenchmark_P"
+  },
   "frames": [
     {
       "index": 0,

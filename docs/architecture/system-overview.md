@@ -26,10 +26,14 @@ graph TD
         TC["TraceComparator"]
         BE["BudgetEvaluator"]
         RE["ReportEngine"]
+        TSy["TraceSynthesizer"]
+        PS["PerformanceScore & TraceStatistics"]
         
         AE --> NT
+        AE --> PS
         TC --> AE
         RE --> AE
+        TSy --> NT
     end
 
     TS -->|Converts .utrace| NT
@@ -62,7 +66,8 @@ flowchart TD
     C --> D["3. CausalChainResolver<br/>(Links root causes & demotes symptoms)"]
     D --> E["4. ConfidenceResolver<br/>(Scores findings & assigns Primary/Secondary)"]
     E --> F["5. CorrelationResolver<br/>(Clusters repetitive temporal hitches)"]
-    F --> G["AnalysisResult<br/>(Resolved findings, hitch count, budget status)"]
+    F --> S["6. Performance Score & Trace Statistics<br/>(Calculates P95s and 0-100 grade)"]
+    S --> G["AnalysisResult<br/>(Resolved findings, hitch count, budget status, score)"]
     G --> H1["FReportEngine<br/>(Markdown / JSON Reports)"]
     G --> H2["ITraceComparator<br/>(Baseline vs. New Diffing)"]
 
@@ -79,3 +84,23 @@ flowchart TD
 3. **Causal Graph**: Resolves inter-dependencies (e.g. streaming IO triggering Game Thread stalls or RHI sync waits) and elevates root cause confidence.
 4. **Confidence Scoring**: Assigns calibrated confidence scores based on evidence weight and selects the `Primary` finding per hitch frame.
 5. **Correlation Clustering**: Coalesces repetitive spikes across temporal windows into composite cluster findings.
+6. **Performance Scoring**: Evaluates the full trace to compute `FTraceStatistics` (P50/P90/P95/P99) and deterministically assigns an `FPerformanceScore` (0-100 and A-F grades) based on budget breaches and hitch density.
+
+---
+
+## Evidence Classification Taxonomy
+
+To uphold the "Claim Discipline" of the engine, every piece of evidence attached to a finding is tagged with an `EEvidenceClassification`:
+
+- `OBSERVED`: Direct factual data (e.g., "GPU took 45ms").
+- `DERIVED`: Computed metrics (e.g., "P95 exceeded by 10ms").
+- `CORRELATED`: Temporally linked events across threads.
+- `INFERRED`: Highly likely deductions based on causal chains.
+- `SUSPECTED`: Low-confidence hypotheses requiring manual confirmation.
+- `RECOMMENDED`: Actionable next steps provided by the rule engine.
+
+---
+
+## Synthetic Telemetry Generation
+
+The `TraceSynthesizer` provides a deterministic ground-truth generation engine for creating pathological traces (e.g., forcing a PSO miss at frame 60). This enables strict accuracy regression testing (the Validation Suite) and allows testing the UI against exact performance scenarios without hunting for real-world trace files.

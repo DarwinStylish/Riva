@@ -172,7 +172,8 @@ int RunCompare(int argc, char** argv) {
   const auto new_result = engine.Analyze(*new_load.trace);
 
   riva::DefaultTraceComparator comparator;
-  const auto comparison_result = comparator.Compare(baseline_result, new_result);
+  const auto comparison_result = comparator.Compare(
+      *baseline_load.trace, baseline_result, *new_load.trace, new_result);
 
   riva::FReportOptions report_options;
   std::string report_output;

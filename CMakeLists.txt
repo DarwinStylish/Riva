@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Riva
-  VERSION 0.1.0
+  VERSION 0.2.0
   DESCRIPTION "Deterministic Unreal Engine performance diagnostics companion"
   LANGUAGES CXX
 )
@@ -23,12 +23,15 @@ add_library(riva_core  src/analysis_engine.cpp
   src/json_trace_loader.cpp
   src/json_utils.cpp
   src/normalized_trace.cpp
+  src/performance_score.cpp
   src/report_engine.cpp
   src/signature_result.cpp
   src/signature_utils.cpp
   src/spike_detector.cpp
   src/trace_adapter_registry.cpp
   src/trace_comparator.cpp
+  src/trace_statistics.cpp
+  src/trace_synthesizer.cpp
   src/version.cpp
 )
 
@@ -190,4 +193,48 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_plugin_structure_tests COMMAND riva_plugin_structure_tests)
+
+  add_executable(riva_trace_statistics_tests
+    tests/trace_statistics_test.cpp
+  )
+
+  target_link_libraries(riva_trace_statistics_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_trace_statistics_tests COMMAND riva_trace_statistics_tests)
+
+  add_executable(riva_trace_synthesizer_tests
+    tests/trace_synthesizer_test.cpp
+  )
+
+  target_link_libraries(riva_trace_synthesizer_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_trace_synthesizer_tests COMMAND riva_trace_synthesizer_tests)
+
+  add_executable(riva_performance_score_tests
+    tests/performance_score_test.cpp
+  )
+
+  target_link_libraries(riva_performance_score_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_performance_score_tests COMMAND riva_performance_score_tests)
+
+  add_executable(riva_pathology_validation_tests
+    tests/pathology_validation_test.cpp
+  )
+
+  target_link_libraries(riva_pathology_validation_tests
+    PRIVATE
+      riva_core
+  )
+
+  add_test(NAME riva_pathology_validation_tests COMMAND riva_pathology_validation_tests)
 endif()
