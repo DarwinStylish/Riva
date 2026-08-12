@@ -78,8 +78,11 @@ class PhysicsSpikeSignature final : public ISignature {
       finding.time_window_start_us = context.window_start_us;
       finding.time_window_end_us = context.window_end_us;
 
-      finding.evidence.push_back(Evidence{"event", "ChaosPhysicsStep"});
-      finding.evidence.push_back(Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms)});
+      finding.affected_thread = "GameThread";
+      finding.affected_system = "Physics";
+
+      finding.evidence.push_back(Evidence{"event", "ChaosPhysicsStep", EEvidenceClassification::kObserved});
+      finding.evidence.push_back(Evidence{"frame_ms", FormatMilliseconds(spike.frame_ms), EEvidenceClassification::kObserved});
 
       finding.suggested_next_steps.push_back("Check active rigid body count in the physics scene.");
       finding.how_to_confirm.push_back("Inspect Chaos physics step timing track in Unreal Insights.");

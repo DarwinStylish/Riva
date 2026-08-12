@@ -56,6 +56,18 @@ Budget files are JSON files containing optional numeric threshold limits specifi
 }
 ```
 
+}
+```
+
+---
+
+## Impact on Performance Score
+
+Budgets are now tightly integrated into Riva's **Performance Scoring System** (the 0-100 A-F grade on every report). 
+
+- **Subsystem Deductions**: If a subsystem (e.g., Game Thread) exceeds 80% of its budget allowance in P95 calculations, its individual score incurs penalties. If it exceeds 100% of the budget, it takes massive penalty deductions, dropping its grade to C, D, or F.
+- **Hitch Penalties**: If the trace's hitch percentage exceeds the acceptable allowance (default 2%), the overall trace score drops rapidly.
+
 ---
 
 ## Evaluating Budgets

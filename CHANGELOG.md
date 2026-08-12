@@ -6,6 +6,34 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ---
 
+## [0.2.0] - 2026-08-11
+
+### Added
+
+- **Quantitative Trace Comparison**: `FTraceStatistics` computes P50/P90/P95/P99 frame time percentiles, per-metric P95 (game thread, render thread, RHI, GPU, physics, AI, network, loading), hitch count, and hitch percentage. `FStatisticalComparison` and `FMetricDelta` enable metric-level diffing with configurable regression thresholds. Comparison reports now include a Markdown **Metric Summary** table with deltas, percentages, and regression indicators.
+- **Synthetic Telemetry Generator**: `FTraceSynthesizer` programmatically generates `NormalizedTrace` instances with configurable pathology injections (shader compile, PSO miss, GC, streaming IO, RHI sync, CPU thread spikes, GPU variance) and known ground truth. Foundation for the performance pathology library.
+- **Evidence Classification Taxonomy**: `EEvidenceClassification` (OBSERVED, DERIVED, CORRELATED, INFERRED, SUSPECTED, RECOMMENDED) on every `Evidence` item. Implements the Riva claim discipline.
+- **First-Class Thread Entity**: `FTraceThread` and `EThreadType` for cross-thread correlation and utilization tracking.
+- **Build Metadata**: `FBuildInfo` for regression tracking across builds, branches, platforms, and engine versions.
+- **Scenario Metadata**: `FScenarioInfo` for scenario-based baselines.
+- **Time-Series Counter Model**: `FTraceCounter` for memory, physics, and other domain signals.
+- **Expanded Frame**: `physics_ms`, `ai_ms`, `network_ms`, `loading_ms`, `memory_bytes`, and per-frame `counters`.
+- **Finding Context**: `affected_thread` and `affected_system` on every `Finding`.
+- **JSON Parsing**: All new fields (build_info, scenario_info, threads, counters, expanded Frame). Fully backward-compatible.
+- **Test Suite Expansion**: 15 CTest executables (up from 13).
+
+### Changed
+
+- **Breaking**: `ITraceComparator::Compare` signature now accepts `NormalizedTrace` references alongside `AnalysisResult` for quantitative metric-level comparison.
+- All 8 builtin signatures now populate `affected_thread`, `affected_system`, and evidence classification.
+- Reports render evidence classification tags, affected thread, and affected system.
+
+### Removed
+
+- Unused `third_party/rapidjson/` dependency.
+
+---
+
 ## [0.1.0] - 2026-07-27
 
 ### Added
