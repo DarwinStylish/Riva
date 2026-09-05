@@ -4,6 +4,11 @@ Riva is split between a standalone diagnostic core and Unreal Engine integration
 
 The standalone core is built from `ue/Plugins/RivaEditor/Source/RivaCore` by CMake and contains the normalized trace model, analysis pipeline, signatures, resolvers, statistics, comparison, budget evaluation, and reporting. The Unreal Editor module owns TraceServices ingestion, Slate UI, file dialogs, and editor-thread coordination.
 
+## Architecture guides
+
+- [System overview and diagrams](system-overview.md)
+- [Custom diagnostic signatures](custom-signatures.md)
+
 ## Decision records
 
 - [ADR 0001: Keep the diagnostic core independent of Unreal Engine headers](adr/0001-pure-cpp20-diagnostic-core.md)

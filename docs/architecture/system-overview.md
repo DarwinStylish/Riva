@@ -85,6 +85,25 @@ flowchart TD
 6. **Performance Scoring**: Evaluates available trace metrics to compute `FTraceStatistics` (P50/P90/P95/P99) and assigns an `FPerformanceScore` (0-100 and A-F grades) from score targets and hitch density. Missing subsystem telemetry is reported as `N/A`; project budget evaluation is a separate gate.
 
 
+## Verification and Integration Boundary
+
+Riva separates the analysis path from the evidence required to claim Unreal Engine package compatibility.
+
+```mermaid
+flowchart LR
+    J[JSON trace] --> N[NormalizedTrace]
+    T[Native .utrace] --> TS[RivaEditor / TraceServices]
+    TS --> N
+    N --> C[Deterministic C++20 core]
+    C --> F[Evidence-ranked findings and reports]
+    C --> G[Comparison and budget gates]
+    V1[Standalone CMake and CTest] --> C
+    V2[UE 5.4 RunUAT BuildPlugin] --> P[Package compatibility evidence]
+    P -.-> TS
+```
+
+Standalone CMake and CTest verification covers the portable core, CLI, deterministic fixtures, gates, and source-level plugin contracts. A successful UE 5.4 `RunUAT BuildPlugin` execution is separately required before Riva claims engine-level package compatibility.
+
 ## Evidence Classification Taxonomy
 
 To uphold the "Claim Discipline" of the engine, every piece of evidence attached to a finding is tagged with an `EEvidenceClassification`:
