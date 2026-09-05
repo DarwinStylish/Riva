@@ -2,11 +2,12 @@
 
 Performance Budgets in Riva allow game teams to establish strict frame-time constraints across thread execution and total frame duration.
 
----
 
 ## JSON Schema Specification
 
-Budget files are JSON files containing optional numeric threshold limits specified in milliseconds (`ms`):
+Budget files are JSON objects containing one or more positive numeric threshold
+limits specified in milliseconds (`ms`). An empty object is rejected so a CI
+gate cannot pass vacuously.
 
 ```json
 {
@@ -28,7 +29,6 @@ Budget files are JSON files containing optional numeric threshold limits specifi
 | `gpu_ms_max` | `number` (optional) | ms | Maximum allowed frame timing on the GPU. |
 | `duration_ms_max` | `number` (optional) | ms | Maximum allowed overall frame duration. |
 
----
 
 ## Budget Presets
 
@@ -56,19 +56,18 @@ Budget files are JSON files containing optional numeric threshold limits specifi
 }
 ```
 
-}
-```
 
----
+## Relationship to Performance Score
 
-## Impact on Performance Score
+Budget evaluation and performance scoring are separate in the current
+prototype:
 
-Budgets are now tightly integrated into Riva's **Performance Scoring System** (the 0-100 A-F grade on every report). 
+- Budget status compares every frame against the thresholds in the selected
+  budget file.
+- The 0-100 performance score uses `FScoreConfig` targets and trace statistics;
+  it does not currently consume `BudgetConfig`.
+- Missing subsystem telemetry is displayed as `N/A`, not as a passing score.
 
-- **Subsystem Deductions**: If a subsystem (e.g., Game Thread) exceeds 80% of its budget allowance in P95 calculations, its individual score incurs penalties. If it exceeds 100% of the budget, it takes massive penalty deductions, dropping its grade to C, D, or F.
-- **Hitch Penalties**: If the trace's hitch percentage exceeds the acceptable allowance (default 2%), the overall trace score drops rapidly.
-
----
 
 ## Evaluating Budgets
 
@@ -77,7 +76,7 @@ Budgets are now tightly integrated into Riva's **Performance Scoring System** (t
 Run `riva check-budget`:
 
 ```bash
-./build/riva check-budget --budget config/budgets.json --trace traces/nightly_run.json
+./build/release/riva check-budget --budget config/budgets.json --trace traces/nightly_run.json
 ```
 
 - If **all metrics pass**, the CLI prints `Budget check passed.` and exits with `0`.

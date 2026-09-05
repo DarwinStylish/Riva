@@ -1,20 +1,28 @@
 # Unreal Editor Plugin User Guide (`RivaEditor`)
 
-The **RivaEditor** plugin embeds Riva directly inside the Unreal Engine 5 Editor as a native, dockable Slate panel (`SRivaPanel`).
+`RivaEditor` is a source plugin targeting Unreal Engine 5.4 on Win64 and Linux. It
+adds a native, dockable Slate panel and runs Riva's deterministic C++ analysis
+pipeline against JSON traces or real Unreal Insights `.utrace` recordings.
 
----
+The descriptor, module boundaries, and standalone core are continuously checked,
+but this repository does not claim UnrealBuildTool compatibility until
+`BuildPlugin` succeeds against an installed UE 5.4 engine (see Package
+verification below).
 
-## Installation
+## Install in an Unreal Engine 5.4 project
 
-1. Copy the `ue/Plugins/RivaEditor` directory into your project's `Plugins/` folder:
-   ```
+1. Copy `ue/Plugins/RivaEditor` into the project's `Plugins` directory:
+
+   ```text
    YourProject/
    └── Plugins/
        └── RivaEditor/
            ├── RivaEditor.uplugin
            └── Source/
    ```
-2. Enable the plugin in `YourProject.uproject`:
+
+2. Add the plugin to `YourProject.uproject`, or enable it in **Edit → Plugins**:
+
    ```json
    {
      "Plugins": [
@@ -25,47 +33,87 @@ The **RivaEditor** plugin embeds Riva directly inside the Unreal Engine 5 Editor
      ]
    }
    ```
-3. Regenerate project files and compile your project in Unreal Editor.
 
----
+3. Regenerate project files, build the project's Editor target, and start the
+   editor. This repository ships source, not precompiled engine binaries.
 
-## Opening the Companion Tab
+4. Open **Window → Developer Tools → Riva Performance Companion**.
 
-In Unreal Editor, open the tab via the main menu:
+## Analyze a trace
 
+1. Select **Open Trace...** and choose a `.json` or `.utrace` file.
+2. Select **Analyze**. Analysis runs on Unreal's background thread pool and UI
+   updates return to the game thread. If a newer analysis starts or another trace
+   is opened first, the stale result is discarded and cannot replace the current
+   export state.
+3. Select a finding to inspect its role, confidence, observed/derived evidence,
+   suggested checks, and exact time window.
+4. Use **Export Markdown...** or **Export JSON...** to preserve the report.
+
+Normal parser rejection, missing trace channels, and corrupt files are shown as
+errors; they are not converted into diagnostic findings.
+
+## Capture a compatible native trace
+
+The native loader needs game-frame boundaries. CPU/GPU timing channels provide
+the thread attribution used by Riva's signatures. Launch the game or editor with
+at least:
+
+```text
+-trace=frame,cpu,gpu -statnamedevents
 ```
-Window ──> Developer Tools ──> Riva Performance Diagnostics
+
+Add channels such as `bookmark`, `file`, or `loadtime` when investigating those
+systems. Stop the capture in Unreal Insights, then open the resulting binary
+`.utrace` file in Riva. The repository intentionally does not ship a text file
+masquerading as a trace fixture.
+
+The UE 5.4 native path currently normalizes:
+
+- game-frame start and duration;
+- GameThread, RenderThread, and RHIThread top-level timing occupancy when present;
+- the legacy GPU timing timeline when present; and
+- trace thread identities.
+
+Named CPU marker extraction is not implemented yet. JSON traces can carry named
+events today; native `.utrace` analysis currently provides timing-based findings.
+
+## Optional project budget
+
+Place `RivaBudget.json` in the Unreal project's `Config` directory. For example:
+
+```json
+{
+  "game_thread_ms_max": 16.667,
+  "render_thread_ms_max": 16.667,
+  "gpu_ms_max": 16.667,
+  "duration_ms_max": 33.333
+}
 ```
 
-The tab spawns as a nomad dockable panel that can be docked anywhere alongside your viewport, Content Browser, or Unreal Insights layout.
+When the file is absent, the panel reports **Budget: Not configured**. An invalid
+budget file fails the analysis with its parser error rather than silently
+reporting that the budget passed.
 
----
+## Current limitations
 
-## Panel Layout & Workflow
+- Unreal Insights timeline selection synchronization is not implemented. The
+  former logging-only prototype was removed rather than presented as integration.
+- Native marker/bookmark names are not yet copied into `NormalizedTrace`.
+- The plugin descriptor targets UE 5.4. Other engine versions require their own
+  source build and compatibility verification.
+- A real UE 5.4 Editor/package build is the final compatibility gate; standalone
+  CMake tests cannot validate UnrealBuildTool or engine API linkage.
 
-### 1. Minimal Toolbar
-- **`Open Trace...`**: Select a trace recording (`.utrace` or `.json`) for analysis.
-- **`Analyze`**: Run deterministic hitch analysis on the loaded trace.
-- **`Export Markdown...`**: Save the diagnostic report to local disk via native OS save file dialog.
-- **`Export JSON...`**: Save structured findings as JSON.
-- **`Sync Insights`**: Toggle bidirectional selection linkage with Unreal Insights.
-- **`Simulate Sync`**: Test time range selection synchronization in standalone editor sessions.
+## Package verification
 
-### 2. Split View Layout
-- **Left Pane (Findings List - 35% Width)**: Displays detected hitches sorted by priority, displaying title, severity, role classification (`[Primary]` vs `[Secondary]`), calibrated confidence score, and time window.
-- **Right Pane (Details & Evidence - 65% Width)**: Displays detailed diagnostic findings:
-  - **Diagnostic Summary**: Title, severity badge, confidence percentage.
-  - **Copy Actions**: `Copy Time Window` and `Copy Summary` buttons to copy payloads to the OS clipboard via `FPlatformApplicationMisc::ClipboardCopy`.
-  - **Evidence Breakdown**: Table of evidence metrics (e.g. `gpu_ms`, `event` markers).
-  - **Actionable Guidance**: "Suggested Next Steps" and "How to Confirm in Unreal Insights".
+With `UE_ROOT` pointing at an Unreal Engine 5.4 installation, package the plugin
+before distribution:
 
-### 3. Dedicated Status Bar
-- Bottom status bar displays real-time execution feedback and performance budget status (`Budget: OK` in green or `Budget: BREACHED` in red).
+```bash
+UE_ROOT=/path/to/UnrealEngine-5.4 ./scripts/verify-ue54-plugin.sh
+```
 
----
-
-## Unreal Insights Bidirectional Selection Sync
-
-When `Sync Insights` is enabled:
-- **Outbound Sync**: Clicking a hitch row in `FindingsListView` broadcasts its timestamp window (`[StartTimeMs, EndTimeMs]`) to Unreal Insights to navigate the timing tracks automatically.
-- **Inbound Sync**: Selecting a time range in Unreal Insights automatically highlights the corresponding hitch row in `FindingsListView` and updates the details pane.
+The script rejects missing or non-5.4 engine roots before invoking `BuildPlugin`.
+On Windows, run the equivalent `RunUAT.bat BuildPlugin` command with
+`-TargetPlatforms=Win64`.
