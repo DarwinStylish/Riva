@@ -1,16 +1,19 @@
-#include <cstdlib>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "riva/build_info.hpp"
+#include "riva/counter.hpp"
 #include "riva/finding.hpp"
 #include "riva/normalized_trace.hpp"
-#include "riva/build_info.hpp"
-#include "riva/thread.hpp"
-#include "riva/counter.hpp"
 #include "riva/signature.hpp"
+#include "riva/signature_utils.hpp"
 #include "riva/spike_detector.hpp"
+#include "riva/thread.hpp"
 
 namespace {
 
@@ -21,35 +24,43 @@ void Expect(bool condition, const char* message) {
   }
 }
 
-class DummySignature final : public riva::ISignature {
- public:
-  [[nodiscard]] std::string id() const override {
-    return "DUMMY";
-  }
+riva::Frame MakeFrame(std::size_t index, std::uint64_t start_time_us, double duration_ms) {
+  riva::Frame frame;
+  frame.index = index;
+  frame.start_time_us = start_time_us;
+  frame.duration_ms = duration_ms;
+  return frame;
+}
 
-  [[nodiscard]] std::string name() const override {
-    return "Dummy Signature";
-  }
+class TestSignature final : public riva::ISignature {
+ public:
+  [[nodiscard]] std::string id() const override { return "TEST"; }
+
+  [[nodiscard]] std::string name() const override { return "Test Signature"; }
 
   [[nodiscard]] std::vector<riva::Finding> Analyze(
-      const riva::NormalizedTrace& trace,
-      const std::vector<riva::Spike>& spikes) const override {
+      const riva::NormalizedTrace& trace, const std::vector<riva::Spike>& spikes) const override {
     std::vector<riva::Finding> findings;
 
     for (const auto& spike : spikes) {
-      const auto& frame = trace.frames()[spike.frame_index];
-      findings.push_back(riva::Finding{
-          "DUMMY",
-          "Dummy spike finding",
-          riva::Severity::kWarning,
-          0.5,
-          spike.frame_index,
-          frame.start_time_us,
-          frame.start_time_us + 1000,
-          {riva::Evidence{"frame_ms", std::to_string(spike.frame_ms)}},
-          {"Inspect the frame in Unreal Insights."},
-          {"Open the same frame range in Unreal Insights and verify timing contributors."},
-      });
+      const riva::SpikeContext context = riva::BuildSpikeContext(trace, spike);
+      if (context.frame == nullptr) {
+        continue;
+      }
+      const auto& frame = *context.frame;
+      riva::Finding finding;
+      finding.id = "TEST";
+      finding.title = "Test spike finding";
+      finding.severity = riva::Severity::kWarning;
+      finding.confidence = 0.5;
+      finding.frame_index = spike.frame_index;
+      finding.time_window_start_us = frame.start_time_us;
+      finding.time_window_end_us = frame.start_time_us + 1000;
+      finding.evidence.push_back(riva::Evidence{"frame_ms", std::to_string(spike.frame_ms)});
+      finding.suggested_next_steps.push_back("Inspect the frame in Unreal Insights.");
+      finding.how_to_confirm.push_back(
+          "Open the same frame range in Unreal Insights and verify timing contributors.");
+      findings.push_back(std::move(finding));
     }
 
     return findings;
@@ -62,16 +73,73 @@ void TestNormalizedTraceRejectsInvalidFrames() {
   Expect(trace.source_name() == "unit-test", "source name must be preserved");
   Expect(trace.empty(), "new trace must be empty");
 
-  auto first = trace.AddFrame(riva::Frame{0, 1000, 16.0});
+  auto first = trace.AddFrame(MakeFrame(0, 1000, 16.0));
   Expect(first.ok(), "first frame should be accepted");
 
-  auto duplicate = trace.AddFrame(riva::Frame{0, 2000, 16.0});
+  auto duplicate = trace.AddFrame(MakeFrame(0, 2000, 16.0));
   Expect(!duplicate.ok(), "duplicate frame index should be rejected");
 
-  auto negative = trace.AddFrame(riva::Frame{1, 3000, -1.0});
+  auto negative = trace.AddFrame(MakeFrame(1, 3000, -1.0));
   Expect(!negative.ok(), "negative frame duration should be rejected");
 
+  riva::Frame non_finite;
+  non_finite.index = 1;
+  non_finite.start_time_us = 3000;
+  non_finite.duration_ms = std::numeric_limits<double>::quiet_NaN();
+  Expect(!trace.AddFrame(std::move(non_finite)).ok(),
+         "non-finite frame duration should be rejected");
+
+  riva::Frame overflowing;
+  overflowing.index = 1;
+  overflowing.start_time_us = std::numeric_limits<std::uint64_t>::max() - 500;
+  overflowing.duration_ms = 1.0;
+  Expect(!trace.AddFrame(std::move(overflowing)).ok(),
+         "overflowing frame time range should be rejected");
+
   Expect(trace.frame_count() == 1, "only one frame should remain accepted");
+
+  riva::NormalizedTrace ordered("ordered");
+  riva::Frame first_ordered;
+  first_ordered.index = 1;
+  first_ordered.start_time_us = 1000;
+  first_ordered.duration_ms = 1.0;
+  Expect(ordered.AddFrame(std::move(first_ordered)).ok(), "first ordered frame must be accepted");
+
+  riva::Frame backwards;
+  backwards.index = 2;
+  backwards.start_time_us = 999;
+  backwards.duration_ms = 1.0;
+  Expect(!ordered.AddFrame(std::move(backwards)).ok(),
+         "backward frame timestamps must be rejected");
+
+  riva::NormalizedTrace counters("counters");
+  riva::Frame bad_counter;
+  bad_counter.index = 1;
+  bad_counter.duration_ms = 1.0;
+  bad_counter.counters.push_back(
+      riva::FTraceCounter{"counter", "", "", 0, std::numeric_limits<double>::infinity()});
+  Expect(!counters.AddFrame(std::move(bad_counter)).ok(),
+         "non-finite counter values must be rejected");
+}
+
+void TestSparseFrameIndicesResolveById() {
+  riva::NormalizedTrace trace("sparse-index-test");
+  const std::vector<std::size_t> frame_ids = {10, 20, 30, 40, 50, 60};
+
+  for (std::size_t position = 0; position < frame_ids.size(); ++position) {
+    const double frame_ms = position + 1 == frame_ids.size() ? 48.0 : 16.0;
+    const auto status = trace.AddFrame(
+        MakeFrame(frame_ids[position], static_cast<std::uint64_t>(position * 16000), frame_ms));
+    Expect(status.ok(), "sparse but increasing frame IDs should be accepted");
+  }
+
+  const auto spikes = riva::RollingMedianSpikeDetector{}.Detect(trace);
+  Expect(spikes.size() == 1, "sparse-ID trace should contain one spike");
+  Expect(spikes[0].frame_index == 60, "spike should preserve the external frame ID");
+
+  const riva::SpikeContext context = riva::BuildSpikeContext(trace, spikes[0]);
+  Expect(context.frame != nullptr, "spike context should resolve a sparse frame ID");
+  Expect(context.frame->index == 60, "spike context should resolve the correct frame");
 }
 
 void TestMedian() {
@@ -85,18 +153,12 @@ void TestSpikeDetection() {
   riva::NormalizedTrace trace("spike-test");
 
   const std::vector<double> frame_times = {
-      16.0,
-      16.1,
-      15.9,
-      16.0,
-      16.2,
-      48.0,
-      16.0,
+      16.0, 16.1, 15.9, 16.0, 16.2, 48.0, 16.0,
   };
 
   for (std::size_t i = 0; i < frame_times.size(); ++i) {
-    auto status = trace.AddFrame(
-        riva::Frame{i, static_cast<std::uint64_t>(i * 16000), frame_times[i]});
+    auto status =
+        trace.AddFrame(MakeFrame(i, static_cast<std::uint64_t>(i * 16000), frame_times[i]));
     Expect(status.ok(), "frame should be accepted");
   }
 
@@ -116,18 +178,17 @@ void TestSignatureInterface() {
 
   for (std::size_t i = 0; i < 6; ++i) {
     const double frame_ms = i == 5 ? 50.0 : 16.0;
-    auto status = trace.AddFrame(
-        riva::Frame{i, static_cast<std::uint64_t>(i * 16000), frame_ms});
+    auto status = trace.AddFrame(MakeFrame(i, static_cast<std::uint64_t>(i * 16000), frame_ms));
     Expect(status.ok(), "frame should be accepted");
   }
 
   riva::RollingMedianSpikeDetector detector;
   const auto spikes = detector.Detect(trace);
 
-  DummySignature signature;
+  TestSignature signature;
   const auto findings = signature.Analyze(trace, spikes);
 
-  Expect(signature.id() == "DUMMY", "signature id must be stable");
+  Expect(signature.id() == "TEST", "signature id must be stable");
   Expect(findings.size() == 1, "signature should produce one finding");
   Expect(findings[0].severity == riva::Severity::kWarning, "finding severity must be preserved");
   Expect(!findings[0].how_to_confirm.empty(), "finding must include confirmation guidance");
@@ -220,7 +281,8 @@ void TestAddThreadRejectsDuplicates() {
   Expect(status.ok(), "first thread should be accepted");
   Expect(trace.threads().size() == 1, "one thread should be stored");
   Expect(trace.threads()[0].name == "GameThread", "thread name must be preserved");
-  Expect(trace.threads()[0].type == riva::EThreadType::kGameThread, "thread type must be preserved");
+  Expect(trace.threads()[0].type == riva::EThreadType::kGameThread,
+         "thread type must be preserved");
 
   riva::FTraceThread thread2;
   thread2.id = 1;
@@ -247,15 +309,23 @@ void TestEvidenceClassification() {
   riva::Evidence derived{"delta_ms", "32.0 ms", riva::EEvidenceClassification::kDerived};
   riva::Evidence correlated{"cluster", "3 spikes", riva::EEvidenceClassification::kCorrelated};
   riva::Evidence inferred{"cause", "gc stall", riva::EEvidenceClassification::kInferred};
-  riva::Evidence suspected{"hypothesis", "memory pressure", riva::EEvidenceClassification::kSuspected};
-  riva::Evidence recommended{"action", "precompile shaders", riva::EEvidenceClassification::kRecommended};
+  riva::Evidence suspected{"hypothesis", "memory pressure",
+                           riva::EEvidenceClassification::kSuspected};
+  riva::Evidence recommended{"action", "precompile shaders",
+                             riva::EEvidenceClassification::kRecommended};
 
-  Expect(observed.classification == riva::EEvidenceClassification::kObserved, "observed classification");
-  Expect(derived.classification == riva::EEvidenceClassification::kDerived, "derived classification");
-  Expect(correlated.classification == riva::EEvidenceClassification::kCorrelated, "correlated classification");
-  Expect(inferred.classification == riva::EEvidenceClassification::kInferred, "inferred classification");
-  Expect(suspected.classification == riva::EEvidenceClassification::kSuspected, "suspected classification");
-  Expect(recommended.classification == riva::EEvidenceClassification::kRecommended, "recommended classification");
+  Expect(observed.classification == riva::EEvidenceClassification::kObserved,
+         "observed classification");
+  Expect(derived.classification == riva::EEvidenceClassification::kDerived,
+         "derived classification");
+  Expect(correlated.classification == riva::EEvidenceClassification::kCorrelated,
+         "correlated classification");
+  Expect(inferred.classification == riva::EEvidenceClassification::kInferred,
+         "inferred classification");
+  Expect(suspected.classification == riva::EEvidenceClassification::kSuspected,
+         "suspected classification");
+  Expect(recommended.classification == riva::EEvidenceClassification::kRecommended,
+         "recommended classification");
 }
 
 }  // namespace
@@ -264,6 +334,7 @@ int main() {
   TestNormalizedTraceRejectsInvalidFrames();
   TestMedian();
   TestSpikeDetection();
+  TestSparseFrameIndicesResolveById();
   TestSignatureInterface();
   TestExpandedFrameFields();
   TestBuildInfoAndScenarioInfo();

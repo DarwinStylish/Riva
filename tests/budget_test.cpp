@@ -1,7 +1,8 @@
 #include "riva/budget.hpp"
-#include <iostream>
-#include <cstdlib>
+
 #include <cmath>
+#include <cstdlib>
+#include <iostream>
 
 namespace {
 void Expect(bool condition, const char* message) {
@@ -16,7 +17,7 @@ void ExpectDoubleEq(double a, double b, const char* message) {
     std::exit(1);
   }
 }
-} // namespace
+}  // namespace
 
 void TestLoadValidBudgetJson() {
   const std::string json = R"({
@@ -50,7 +51,8 @@ void TestLoadPartialBudgetJson() {
 
   ExpectDoubleEq(*result.config->game_thread_ms_max, 16.6, "game_thread_ms_max partial");
   ExpectDoubleEq(*result.config->gpu_ms_max, 33.3, "gpu_ms_max partial");
-  Expect(!result.config->render_thread_ms_max.has_value(), "render_thread_ms_max should be nullopt");
+  Expect(!result.config->render_thread_ms_max.has_value(),
+         "render_thread_ms_max should be nullopt");
   Expect(!result.config->rhi_thread_ms_max.has_value(), "rhi_thread_ms_max should be nullopt");
   Expect(!result.config->duration_ms_max.has_value(), "duration_ms_max should be nullopt");
 }
@@ -65,10 +67,23 @@ void TestInvalidBudgetJson() {
   Expect(!result.config.has_value(), "Invalid JSON value should not parse config");
 }
 
+void TestRejectsEmptyAndNonPositiveBudgets() {
+  auto result = riva::LoadBudgetConfigFromJsonText("{}");
+  Expect(!result.status.ok(), "Empty budget should not create a vacuous passing gate");
+  Expect(!result.config.has_value(), "Empty budget should not produce a config");
+
+  result = riva::LoadBudgetConfigFromJsonText(R"({"duration_ms_max": 0})");
+  Expect(!result.status.ok(), "Zero budget threshold should fail");
+
+  result = riva::LoadBudgetConfigFromJsonText(R"({"gpu_ms_max": -1})");
+  Expect(!result.status.ok(), "Negative budget threshold should fail");
+}
+
 int main() {
   TestLoadValidBudgetJson();
   TestLoadPartialBudgetJson();
   TestInvalidBudgetJson();
+  TestRejectsEmptyAndNonPositiveBudgets();
   std::cout << "All budget tests passed!\n";
   return 0;
 }

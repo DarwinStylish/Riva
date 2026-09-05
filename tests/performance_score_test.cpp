@@ -1,9 +1,10 @@
+#include "riva/performance_score.hpp"
+
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
-#include "riva/performance_score.hpp"
 #include "riva/trace_statistics.hpp"
 
 namespace {
@@ -15,9 +16,7 @@ void Expect(bool condition, const char* message) {
   }
 }
 
-bool InRange(double value, double low, double high) {
-  return value >= low && value <= high;
-}
+bool InRange(double value, double low, double high) { return value >= low && value <= high; }
 
 riva::FTraceStatistics MakeCleanStats() {
   riva::FTraceStatistics stats;
@@ -77,6 +76,7 @@ void TestCleanTraceGetsA() {
   auto stats = MakeCleanStats();
   auto score = riva::ComputePerformanceScore(stats);
 
+  Expect(score.has_data, "clean trace score must be available");
   Expect(score.overall >= 90.0, "clean trace must score >= 90");
   Expect(score.overall_grade == "A", "clean trace must be grade A");
   Expect(!score.subsystems.empty(), "subsystems must be populated");
@@ -90,8 +90,7 @@ void TestModerateTraceGetsCorD() {
   auto stats = MakeModerateStats();
   auto score = riva::ComputePerformanceScore(stats);
 
-  Expect(InRange(score.overall, 40.0, 79.0),
-         "moderate trace must score between 40-79");
+  Expect(InRange(score.overall, 40.0, 79.0), "moderate trace must score between 40-79");
   Expect(score.overall_grade == "C" || score.overall_grade == "D" || score.overall_grade == "F",
          "moderate trace must be grade C, D, or F");
 }
@@ -105,19 +104,35 @@ void TestTerribleTraceGetsF() {
          "terrible trace must be grade F or D");
 }
 
-void TestEmptyTraceGetsFullScore() {
+void TestEmptyTraceHasNoScore() {
   riva::FTraceStatistics stats;  // total_frames = 0
   auto score = riva::ComputePerformanceScore(stats);
 
-  Expect(score.overall == 100.0, "empty trace must score 100");
-  Expect(score.overall_grade == "A", "empty trace must be grade A");
+  Expect(!score.has_data, "empty trace must not claim a performance score");
+  Expect(score.overall == 0.0, "empty trace unavailable score uses neutral numeric value");
+  Expect(score.overall_grade == "N/A", "empty trace grade must be N/A");
+}
+
+void TestMissingSubsystemTelemetryIsUnavailable() {
+  auto stats = MakeCleanStats();
+  stats.render_thread_p95_ms = 0.0;
+
+  const auto score = riva::ComputePerformanceScore(stats);
+  for (const auto& subsystem : score.subsystems) {
+    if (subsystem.name == "Render Thread") {
+      Expect(!subsystem.has_data, "missing render telemetry must be marked unavailable");
+      Expect(subsystem.grade == "N/A", "missing render telemetry must not receive grade A");
+      return;
+    }
+  }
+  Expect(false, "render subsystem must be present");
 }
 
 void TestSubsystemScoresReflectMetrics() {
   auto stats = MakeCleanStats();
-  stats.game_thread_p95_ms = 25.0;  // Over budget
+  stats.game_thread_p95_ms = 25.0;   // Over budget
   stats.render_thread_p95_ms = 7.0;  // Within budget
-  stats.gpu_p95_ms = 10.0;  // Within budget
+  stats.gpu_p95_ms = 10.0;           // Within budget
 
   auto score = riva::ComputePerformanceScore(stats);
 
@@ -174,7 +189,8 @@ int main() {
   TestCleanTraceGetsA();
   TestModerateTraceGetsCorD();
   TestTerribleTraceGetsF();
-  TestEmptyTraceGetsFullScore();
+  TestEmptyTraceHasNoScore();
+  TestMissingSubsystemTelemetryIsUnavailable();
   TestSubsystemScoresReflectMetrics();
   TestScoreConfigOverrides();
   TestGradeMapping();

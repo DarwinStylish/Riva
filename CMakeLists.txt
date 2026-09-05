@@ -12,32 +12,33 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(RIVA_BUILD_TESTS "Build Riva tests" ON)
 
-add_library(riva_core  src/analysis_engine.cpp
-  src/budget.cpp
-  src/builtin_signatures.cpp
-  src/causal_chain_resolver.cpp
-  src/confidence_resolver.cpp
-  src/correlation_resolver.cpp
-  src/default_analysis.cpp
-  src/json_trace_adapter.cpp
-  src/json_trace_loader.cpp
-  src/json_utils.cpp
-  src/normalized_trace.cpp
-  src/performance_score.cpp
-  src/report_engine.cpp
-  src/signature_result.cpp
-  src/signature_utils.cpp
-  src/spike_detector.cpp
-  src/trace_adapter_registry.cpp
-  src/trace_comparator.cpp
-  src/trace_statistics.cpp
-  src/trace_synthesizer.cpp
-  src/version.cpp
+add_library(riva_core
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/analysis_engine.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/budget.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/builtin_signatures.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/causal_chain_resolver.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/confidence_resolver.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/correlation_resolver.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/default_analysis.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/json_trace_adapter.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/json_trace_loader.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/json_utils.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/normalized_trace.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/performance_score.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/report_engine.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/signature_result.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/signature_utils.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/spike_detector.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_adapter_registry.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_comparator.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_statistics.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_synthesizer.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/version.cpp
 )
 
 target_include_directories(riva_core
   PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/ue/Plugins/RivaEditor/Source/RivaCore/Public
 )
 
 if(MSVC)

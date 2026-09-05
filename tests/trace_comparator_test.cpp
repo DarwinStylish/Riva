@@ -1,3 +1,5 @@
+#include "riva/trace_comparator.hpp"
+
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -5,19 +7,18 @@
 #include <vector>
 
 #include "riva/normalized_trace.hpp"
-#include "riva/trace_comparator.hpp"
 
 namespace riva {
 namespace {
 
-ResolvedFinding MakePrimaryFinding(std::string id) {
+ResolvedFinding MakePrimaryFinding(const std::string& id) {
   ResolvedFinding r;
   r.finding.id = id;
   r.role = FindingRole::kPrimary;
   return r;
 }
 
-ResolvedFinding MakeSecondaryFinding(std::string id) {
+ResolvedFinding MakeSecondaryFinding(const std::string& id) {
   ResolvedFinding r;
   r.finding.id = id;
   r.role = FindingRole::kSecondary;
@@ -26,7 +27,8 @@ ResolvedFinding MakeSecondaryFinding(std::string id) {
 
 void AssertEq(std::size_t actual, std::size_t expected, const std::string& msg) {
   if (actual != expected) {
-    std::cerr << "Assertion failed: " << msg << ". Expected " << expected << ", got " << actual << "\n";
+    std::cerr << "Assertion failed: " << msg << ". Expected " << expected << ", got " << actual
+              << "\n";
     std::exit(1);
   }
 }
@@ -38,9 +40,7 @@ void AssertTrue(bool condition, const std::string& msg) {
   }
 }
 
-bool ApproxEqual(double a, double b, double epsilon = 0.1) {
-  return std::fabs(a - b) < epsilon;
-}
+bool ApproxEqual(double a, double b, double epsilon = 0.1) { return std::fabs(a - b) < epsilon; }
 
 // Helper: build a trace with uniform frame times
 NormalizedTrace MakeTrace(const std::string& name, std::size_t count, double duration_ms) {
@@ -52,8 +52,9 @@ NormalizedTrace MakeTrace(const std::string& name, std::size_t count, double dur
     frame.duration_ms = duration_ms;
     frame.game_thread_ms = duration_ms * 0.625;
     frame.render_thread_ms = duration_ms * 0.5;
+    frame.rhi_thread_ms = duration_ms * 0.2;
     frame.gpu_ms = duration_ms * 0.7;
-    (void)trace.AddFrame(std::move(frame));
+    AssertTrue(trace.AddFrame(std::move(frame)).ok(), "comparison test frame must be accepted");
   }
   return trace;
 }
@@ -64,16 +65,15 @@ void TestDetectsRegressionsAndImprovements() {
 
   AnalysisResult baseline;
   baseline.findings = {
-    MakePrimaryFinding("STUT_GC"),
-    MakePrimaryFinding("STUT_STREAMING_IO"),
-    MakeSecondaryFinding("STUT_CPU_GT") // Should be ignored
+      MakePrimaryFinding("STUT_GC"), MakePrimaryFinding("STUT_STREAMING_IO"),
+      MakeSecondaryFinding("STUT_CPU_GT")  // Should be ignored
   };
 
   AnalysisResult new_result;
   new_result.findings = {
-    MakePrimaryFinding("STUT_GC"), // Unchanged
-    MakePrimaryFinding("STUT_SHADER_COMPILE"), // Regression
-    MakeSecondaryFinding("STUT_CPU_RT") // Should be ignored
+      MakePrimaryFinding("STUT_GC"),              // Unchanged
+      MakePrimaryFinding("STUT_SHADER_COMPILE"),  // Regression
+      MakeSecondaryFinding("STUT_CPU_RT")         // Should be ignored
   };
 
   DefaultTraceComparator comparator;
@@ -83,10 +83,12 @@ void TestDetectsRegressionsAndImprovements() {
   AssertTrue(output.unchanged[0].finding.id == "STUT_GC", "GC is unchanged");
 
   AssertEq(output.regressions.size(), 1, "Should have 1 regression");
-  AssertTrue(output.regressions[0].finding.id == "STUT_SHADER_COMPILE", "Shader compile is regression");
+  AssertTrue(output.regressions[0].finding.id == "STUT_SHADER_COMPILE",
+             "Shader compile is regression");
 
   AssertEq(output.improvements.size(), 1, "Should have 1 improvement");
-  AssertTrue(output.improvements[0].finding.id == "STUT_STREAMING_IO", "Streaming IO is improvement");
+  AssertTrue(output.improvements[0].finding.id == "STUT_STREAMING_IO",
+             "Streaming IO is improvement");
 }
 
 void TestMetricDeltas() {
@@ -138,9 +140,28 @@ void TestNoRegressionOnIdenticalTraces() {
   // All deltas should be zero, no regression
   for (const auto& md : output.statistics.metric_deltas) {
     AssertTrue(!md.bRegressed, ("No regression expected for: " + md.metric_name).c_str());
-    AssertTrue(ApproxEqual(md.delta, 0.0, 0.01), ("Delta must be zero for: " + md.metric_name).c_str());
+    AssertTrue(ApproxEqual(md.delta, 0.0, 0.01),
+               ("Delta must be zero for: " + md.metric_name).c_str());
   }
-  AssertTrue(!output.statistics.bOverallRegressed, "overall must not be regressed for identical traces");
+  AssertTrue(!output.statistics.bOverallRegressed,
+             "overall must not be regressed for identical traces");
+}
+
+void TestDetectsRegressionFromZeroBaseline() {
+  auto baseline_trace = MakeTrace("zero-baseline", 10, 0.0);
+  auto new_trace_data = MakeTrace("nonzero", 10, 16.0);
+
+  DefaultTraceComparator comparator;
+  const auto output =
+      comparator.Compare(baseline_trace, AnalysisResult{}, new_trace_data, AnalysisResult{});
+
+  AssertTrue(output.statistics.bOverallRegressed,
+             "an absolute increase from a zero baseline must be a regression");
+  AssertTrue(!output.statistics.metric_deltas.empty(), "metric deltas must be present");
+  AssertTrue(output.statistics.metric_deltas[0].bRegressed,
+             "P50 increase from zero must be flagged");
+  AssertTrue(!output.statistics.metric_deltas[0].bPercentageDefined,
+             "percentage change from zero must be marked undefined");
 }
 
 }  // namespace
@@ -150,6 +171,7 @@ int main() {
   riva::TestDetectsRegressionsAndImprovements();
   riva::TestMetricDeltas();
   riva::TestNoRegressionOnIdenticalTraces();
+  riva::TestDetectsRegressionFromZeroBaseline();
   std::cout << "Trace comparator tests passed!\n";
   return 0;
 }

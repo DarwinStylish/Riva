@@ -1,10 +1,11 @@
+#include "riva/trace_synthesizer.hpp"
+
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
 #include "riva/analysis_engine.hpp"
 #include "riva/builtin_signatures.hpp"
-#include "riva/trace_synthesizer.hpp"
 
 namespace {
 
@@ -21,6 +22,7 @@ void TestGeneratesCorrectFrameCount() {
   config.frame_count = 60;
 
   auto result = riva::FTraceSynthesizer::Generate(config);
+  Expect(result.status.ok(), "valid frame-count configuration must succeed");
   Expect(result.trace.frame_count() == 60, "should generate exactly 60 frames");
   Expect(result.trace.source_name() == "frame-count-test", "source name must match");
 }
@@ -33,6 +35,7 @@ void TestBaselineFramesAreStable() {
   config.baseline_jitter_ms = 0.5;
 
   auto result = riva::FTraceSynthesizer::Generate(config);
+  Expect(result.status.ok(), "valid baseline configuration must succeed");
 
   for (const auto& frame : result.trace.frames()) {
     Expect(frame.duration_ms > 14.0 && frame.duration_ms < 18.0,
@@ -54,12 +57,11 @@ void TestPathologyInjection() {
   config.injections.push_back(injection);
 
   auto result = riva::FTraceSynthesizer::Generate(config);
+  Expect(result.status.ok(), "valid injection must succeed");
 
   // Verify spike frame
-  Expect(result.trace.frames()[15].duration_ms == 55.0,
-         "spike frame must have injected duration");
-  Expect(!result.trace.frames()[15].events.empty(),
-         "spike frame must have marker events");
+  Expect(result.trace.frames()[15].duration_ms == 55.0, "spike frame must have injected duration");
+  Expect(!result.trace.frames()[15].events.empty(), "spike frame must have marker events");
   Expect(result.trace.frames()[15].events[0].name == "ShaderCompileWorker blocked frame",
          "spike frame must have correct marker name");
   Expect(result.trace.frames()[15].events[0].thread_name == "GameThread",
@@ -69,8 +71,7 @@ void TestPathologyInjection() {
   Expect(result.ground_truth.size() == 1, "one ground truth entry");
   Expect(result.ground_truth[0].type == riva::EPathologyType::kShaderCompile,
          "ground truth type must match");
-  Expect(result.ground_truth[0].frame_index == 15,
-         "ground truth frame index must match");
+  Expect(result.ground_truth[0].frame_index == 15, "ground truth frame index must match");
 }
 
 void TestMultiplePathologies() {
@@ -84,6 +85,7 @@ void TestMultiplePathologies() {
   config.injections.push_back({riva::EPathologyType::kStreamingIo, 80, 45.0, ""});
 
   auto result = riva::FTraceSynthesizer::Generate(config);
+  Expect(result.status.ok(), "valid multiple injections must succeed");
 
   Expect(result.ground_truth.size() == 3, "three ground truth entries");
   Expect(result.trace.frames()[20].duration_ms == 48.0, "first spike must match");
@@ -93,8 +95,7 @@ void TestMultiplePathologies() {
   // Verify different marker names
   Expect(result.trace.frames()[20].events[0].name == "ShaderCompileWorker blocked frame",
          "shader marker");
-  Expect(result.trace.frames()[50].events[0].name == "GarbageCollect mark sweep",
-         "gc marker");
+  Expect(result.trace.frames()[50].events[0].name == "GarbageCollect mark sweep", "gc marker");
   Expect(result.trace.frames()[80].events[0].name == "Async Loading streaming IO request",
          "io marker");
 }
@@ -109,6 +110,8 @@ void TestDeterminism() {
 
   auto result1 = riva::FTraceSynthesizer::Generate(config);
   auto result2 = riva::FTraceSynthesizer::Generate(config);
+  Expect(result1.status.ok() && result2.status.ok(),
+         "valid deterministic configurations must succeed");
 
   Expect(result1.trace.frame_count() == result2.trace.frame_count(),
          "determinism: frame counts must match");
@@ -128,6 +131,7 @@ void TestAnalysisDetectsInjectedPathology() {
   config.injections.push_back({riva::EPathologyType::kShaderCompile, 60, 55.0, ""});
 
   auto synthesized = riva::FTraceSynthesizer::Generate(config);
+  Expect(synthesized.status.ok(), "valid analysis fixture must succeed");
 
   // Run the full analysis pipeline
   auto signatures = riva::CreateBuiltinSignatures();
@@ -139,8 +143,7 @@ void TestAnalysisDetectsInjectedPathology() {
   for (const auto& rf : analysis.findings) {
     if (rf.finding.id == "STUT_SHADER_COMPILE") {
       found_shader = true;
-      Expect(rf.finding.frame_index == 60,
-             "shader finding must point to the injected frame");
+      Expect(rf.finding.frame_index == 60, "shader finding must point to the injected frame");
       break;
     }
   }
@@ -158,13 +161,34 @@ void TestBuildInfoAndScenarioRoundTrip() {
   config.scenario_info.map_name = "TestMap_P";
 
   auto result = riva::FTraceSynthesizer::Generate(config);
+  Expect(result.status.ok(), "valid metadata fixture must succeed");
 
   Expect(result.trace.build_info().build_id == "B-999", "build_id must round-trip");
   Expect(result.trace.build_info().branch == "main", "branch must round-trip");
   Expect(result.trace.scenario_info().scenario_id == "test-scenario",
          "scenario_id must round-trip");
-  Expect(result.trace.scenario_info().map_name == "TestMap_P",
-         "map_name must round-trip");
+  Expect(result.trace.scenario_info().map_name == "TestMap_P", "map_name must round-trip");
+}
+
+void TestRejectsInvalidConfiguration() {
+  riva::FTraceSynthesizerConfig config;
+  config.baseline_jitter_ms = config.baseline_frame_ms;
+  auto result = riva::FTraceSynthesizer::Generate(config);
+  Expect(!result.status.ok(), "jitter that can produce non-positive frames must be rejected");
+  Expect(result.trace.empty(), "invalid configuration must not return a partial trace");
+
+  config = riva::FTraceSynthesizerConfig{};
+  config.frame_count = 5;
+  config.injections.push_back({riva::EPathologyType::kShaderCompile, 5, 50.0, ""});
+  result = riva::FTraceSynthesizer::Generate(config);
+  Expect(!result.status.ok(), "out-of-range injection must be rejected");
+
+  config = riva::FTraceSynthesizerConfig{};
+  config.frame_count = 5;
+  config.injections.push_back({riva::EPathologyType::kShaderCompile, 2, 50.0, ""});
+  config.injections.push_back({riva::EPathologyType::kPsoMiss, 2, 50.0, ""});
+  result = riva::FTraceSynthesizer::Generate(config);
+  Expect(!result.status.ok(), "duplicate injection frames must be rejected");
 }
 
 }  // namespace
@@ -177,6 +201,7 @@ int main() {
   TestDeterminism();
   TestAnalysisDetectsInjectedPathology();
   TestBuildInfoAndScenarioRoundTrip();
+  TestRejectsInvalidConfiguration();
   std::cout << "All trace synthesizer tests passed successfully!\n";
   return 0;
 }

@@ -1,7 +1,7 @@
+#include "riva/json_trace_loader.hpp"
+
 #include <cstdlib>
 #include <iostream>
-
-#include "riva/json_trace_loader.hpp"
 
 namespace {
 
@@ -62,7 +62,8 @@ void TestLoadsValidTrace() {
 void TestRejectsMalformedJson() {
   const auto result = riva::LoadNormalizedTraceFromJsonText("{");
   Expect(!result.status.ok(), "malformed JSON should fail");
-  Expect(result.status.code() == riva::StatusCode::kParseError, "malformed JSON should be parse error");
+  Expect(result.status.code() == riva::StatusCode::kParseError,
+         "malformed JSON should be parse error");
 }
 
 void TestRejectsMissingRequiredField() {
@@ -88,7 +89,8 @@ void TestAllowsUnknownFieldWhenConfigured() {
     "source_name": "unknown-field",
     "frames": [],
     "extra": true
-  })JSON", riva::JsonTraceLoaderOptions{true});
+  })JSON",
+                                                            riva::JsonTraceLoaderOptions{true});
 
   Expect(result.status.ok(), "unknown field should be allowed when configured");
 }
@@ -111,6 +113,58 @@ void TestRejectsNonIncreasingFrames() {
   })JSON");
 
   Expect(!result.status.ok(), "duplicate frame index should fail");
+}
+
+void TestRejectsOutOfRangeIntegers() {
+  const auto frame_index = riva::LoadNormalizedTraceFromJsonText(R"JSON({
+    "source_name": "huge-index",
+    "frames": [
+      {"index": 1e300, "start_time_us": 0, "duration_ms": 16.0}
+    ]
+  })JSON");
+  Expect(!frame_index.status.ok(), "out-of-range frame index should fail safely");
+
+  const auto player_count = riva::LoadNormalizedTraceFromJsonText(R"JSON({
+    "source_name": "huge-player-count",
+    "scenario_info": {"player_count": 4294967296},
+    "frames": [
+      {"index": 0, "start_time_us": 0, "duration_ms": 16.0}
+    ]
+  })JSON");
+  Expect(!player_count.status.ok(), "player count above uint32 range should fail");
+}
+
+void TestUnicodeEscapesAndParserLimits() {
+  const auto unicode = riva::LoadNormalizedTraceFromJsonText(R"JSON({
+    "source_name": "Riva \uD83D\uDE80",
+    "frames": []
+  })JSON");
+  Expect(unicode.status.ok(), "valid Unicode surrogate pair should load");
+  Expect(unicode.trace->source_name() == "Riva \xF0\x9F\x9A\x80",
+         "Unicode escape must decode to UTF-8");
+
+  const auto bad_surrogate = riva::LoadNormalizedTraceFromJsonText(R"JSON({
+    "source_name": "\uD83Dbroken",
+    "frames": []
+  })JSON");
+  Expect(!bad_surrogate.status.ok(), "unpaired high surrogate must be rejected");
+
+  riva::JsonTraceLoaderOptions size_options;
+  size_options.max_input_bytes = 16;
+  const auto oversized = riva::LoadNormalizedTraceFromJsonText(
+      R"JSON({"source_name":"too-large","frames":[]})JSON", size_options);
+  Expect(!oversized.status.ok(), "JSON above configured input limit must be rejected");
+
+  riva::JsonTraceLoaderOptions depth_options;
+  depth_options.allow_unknown_fields = true;
+  depth_options.max_nesting_depth = 2;
+  const auto too_deep = riva::LoadNormalizedTraceFromJsonText(R"JSON({
+    "source_name": "deep",
+    "frames": [],
+    "extra": [[[0]]]
+  })JSON",
+                                                              depth_options);
+  Expect(!too_deep.status.ok(), "JSON above configured nesting limit must be rejected");
 }
 
 }  // namespace
@@ -240,7 +294,8 @@ void TestLoadsThreads() {
   Expect(result.trace.has_value(), "result should contain trace");
   Expect(result.trace->threads().size() == 2, "two threads should parse");
   Expect(result.trace->threads()[0].name == "GameThread", "thread name should parse");
-  Expect(result.trace->threads()[0].type == riva::EThreadType::kGameThread, "thread type should parse");
+  Expect(result.trace->threads()[0].type == riva::EThreadType::kGameThread,
+         "thread type should parse");
   Expect(result.trace->threads()[1].name == "RenderThread", "second thread name should parse");
 }
 
@@ -251,6 +306,8 @@ int main() {
   TestRejectsUnknownFieldByDefault();
   TestAllowsUnknownFieldWhenConfigured();
   TestRejectsNonIncreasingFrames();
+  TestRejectsOutOfRangeIntegers();
+  TestUnicodeEscapesAndParserLimits();
   TestLoadsExpandedFrameFields();
   TestLoadsBuildInfoAndScenarioInfo();
   TestLoadsThreads();
