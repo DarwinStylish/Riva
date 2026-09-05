@@ -1,0 +1,40 @@
+{
+  "source_name": "spike_gpu_variance_lumen_sample",
+  "frames": [
+    {
+      "index": 0,
+      "start_time_us": 0,
+      "duration_ms": 16.0,
+      "game_thread_ms": 9.0,
+      "render_thread_ms": 7.0,
+      "gpu_ms": 12.0,
+      "events": []
+    },
+    {
+      "index": 1,
+      "start_time_us": 16000,
+      "duration_ms": 16.1,
+      "game_thread_ms": 9.1,
+      "render_thread_ms": 7.1,
+      "gpu_ms": 12.1,
+      "events": []
+    },
+    {
+      "index": 2,
+      "start_time_us": 32000,
+      "duration_ms": 55.0,
+      "game_thread_ms": 10.0,
+      "render_thread_ms": 12.0,
+      "gpu_ms": 52.0,
+      "events": [
+        {
+          "name": "Lumen Scene Lighting and Virtual Shadow Maps",
+          "category": "GPU",
+          "thread_name": "GPU",
+          "start_time_us": 33000,
+          "duration_us": 15000
+        }
+      ]
+    }
+  ]
+}

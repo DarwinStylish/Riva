@@ -1,0 +1,7 @@
+{
+  "game_thread_ms_max": 16.667,
+  "render_thread_ms_max": 16.667,
+  "rhi_thread_ms_max": 16.667,
+  "gpu_ms_max": 16.667,
+  "duration_ms_max": 33.333
+}
