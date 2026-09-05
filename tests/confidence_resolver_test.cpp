@@ -1,3 +1,5 @@
+#include "riva/confidence_resolver.hpp"
+
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -6,7 +8,6 @@
 
 #include "riva/analysis_engine.hpp"
 #include "riva/builtin_signatures.hpp"
-#include "riva/confidence_resolver.hpp"
 #include "riva/normalized_trace.hpp"
 
 namespace {
@@ -56,8 +57,10 @@ riva::NormalizedTrace MakeTraceWithMultipleSignals() {
     frame.gpu_ms = i == 5 ? 35.0 : 12.0;
 
     if (i == 5) {
-      frame.events.push_back(MakeEvent("ShaderCompileWorker blocked frame", frame.start_time_us, 4000));
-      frame.events.push_back(MakeEvent("GarbageCollect mark sweep", frame.start_time_us + 1000, 5000));
+      frame.events.push_back(
+          MakeEvent("ShaderCompileWorker blocked frame", frame.start_time_us, 4000));
+      frame.events.push_back(
+          MakeEvent("GarbageCollect mark sweep", frame.start_time_us + 1000, 5000));
     }
 
     auto status = trace.AddFrame(std::move(frame));
@@ -78,7 +81,8 @@ void TestResolverSelectsPrimaryAndSecondary() {
   Expect(result.findings.size() == 2, "resolver should keep both findings");
   Expect(result.findings[0].finding.id == "HIGH", "highest confidence finding should sort first");
   Expect(result.findings[0].role == riva::FindingRole::kPrimary, "first finding should be primary");
-  Expect(result.findings[1].role == riva::FindingRole::kSecondary, "conflicting finding should be secondary");
+  Expect(result.findings[1].role == riva::FindingRole::kSecondary,
+         "conflicting finding should be secondary");
 }
 
 void TestResolverDropsWeakFindings() {
@@ -113,12 +117,28 @@ void TestAnalysisEngineRunsSignaturesAndResolution() {
       saw_confirmation = true;
     }
 
-    Expect(resolved.finding.confidence >= 0.25, "resolved confidence should pass minimum threshold");
-    Expect(resolved.finding.confidence <= 0.95, "resolved confidence should be capped conservatively");
+    Expect(resolved.finding.confidence >= 0.25,
+           "resolved confidence should pass minimum threshold");
+    Expect(resolved.finding.confidence <= 0.95,
+           "resolved confidence should be capped conservatively");
   }
 
   Expect(saw_primary, "analysis result should include a primary finding");
   Expect(saw_confirmation, "resolved findings must preserve how-to-confirm guidance");
+}
+
+void TestAnalysisEngineAppliesScoreConfiguration() {
+  auto trace = MakeTraceWithMultipleSignals();
+
+  riva::AnalysisConfig config;
+  config.performance_score.hitch_threshold_ms = 60.0;
+  riva::AnalysisEngine engine(riva::CreateBuiltinSignatures(), config);
+  const auto result = engine.Analyze(trace);
+
+  Expect(result.statistics.hitch_count == 0,
+         "analysis statistics must use the configured score hitch threshold");
+  Expect(result.statistics.hitch_percentage == 0.0,
+         "analysis hitch percentage must use the configured score hitch threshold");
 }
 
 }  // namespace
@@ -127,5 +147,6 @@ int main() {
   TestResolverSelectsPrimaryAndSecondary();
   TestResolverDropsWeakFindings();
   TestAnalysisEngineRunsSignaturesAndResolution();
+  TestAnalysisEngineAppliesScoreConfiguration();
   return 0;
 }

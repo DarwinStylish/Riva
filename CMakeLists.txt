@@ -11,49 +11,71 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(RIVA_BUILD_TESTS "Build Riva tests" ON)
+option(RIVA_BUILD_CLI "Build the Riva command-line tool" ON)
+option(RIVA_BUILD_FUZZERS "Build Riva fuzzing targets" OFF)
+option(RIVA_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(RIVA_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
-add_library(riva_core  src/analysis_engine.cpp
-  src/budget.cpp
-  src/builtin_signatures.cpp
-  src/causal_chain_resolver.cpp
-  src/confidence_resolver.cpp
-  src/correlation_resolver.cpp
-  src/default_analysis.cpp
-  src/json_trace_adapter.cpp
-  src/json_trace_loader.cpp
-  src/json_utils.cpp
-  src/normalized_trace.cpp
-  src/performance_score.cpp
-  src/report_engine.cpp
-  src/signature_result.cpp
-  src/signature_utils.cpp
-  src/spike_detector.cpp
-  src/trace_adapter_registry.cpp
-  src/trace_comparator.cpp
-  src/trace_statistics.cpp
-  src/trace_synthesizer.cpp
-  src/version.cpp
+if(MSVC)
+  add_compile_options(/W4 /permissive-)
+  if(RIVA_WARNINGS_AS_ERRORS)
+    add_compile_options(/WX)
+  endif()
+else()
+  add_compile_options(-Wall -Wextra -Wpedantic)
+  if(RIVA_WARNINGS_AS_ERRORS)
+    add_compile_options(-Werror)
+  endif()
+endif()
+
+if(RIVA_ENABLE_SANITIZERS)
+  if(MSVC)
+    message(FATAL_ERROR "RIVA_ENABLE_SANITIZERS currently requires GCC or Clang")
+  endif()
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+endif()
+
+add_library(riva_core
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/analysis_engine.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/budget.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/builtin_signatures.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/causal_chain_resolver.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/confidence_resolver.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/correlation_resolver.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/default_analysis.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/json_trace_adapter.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/json_trace_loader.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/json_utils.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/normalized_trace.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/performance_score.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/report_engine.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/signature_result.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/signature_utils.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/spike_detector.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_adapter_registry.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_comparator.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_statistics.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/trace_synthesizer.cpp
+  ue/Plugins/RivaEditor/Source/RivaCore/Private/version.cpp
 )
 
 target_include_directories(riva_core
   PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/ue/Plugins/RivaEditor/Source/RivaCore/Public
 )
 
-if(MSVC)
-  target_compile_options(riva_core PRIVATE /W4 /permissive-)
-else()
-  target_compile_options(riva_core PRIVATE -Wall -Wextra -Wpedantic)
+if(RIVA_BUILD_CLI)
+  add_executable(riva
+    apps/riva-cli/main.cpp
+  )
+
+  target_link_libraries(riva
+    PRIVATE
+      riva_core
+  )
+
 endif()
-
-add_executable(riva
-  apps/riva-cli/main.cpp
-)
-
-target_link_libraries(riva
-  PRIVATE
-    riva_core
-)
 
 if(RIVA_BUILD_TESTS)
   enable_testing()
@@ -182,6 +204,19 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_cli_integration_tests COMMAND riva_cli_integration_tests)
+  set_tests_properties(riva_cli_integration_tests PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+
+  if(RIVA_BUILD_CLI)
+    add_test(
+      NAME riva_cli_process_tests
+      COMMAND "${CMAKE_COMMAND}"
+        "-DRIVA_EXECUTABLE=$<TARGET_FILE:riva>"
+        "-DRIVA_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_process_test.cmake"
+    )
+  endif()
 
   add_executable(riva_plugin_structure_tests
     tests/plugin_structure_test.cpp
@@ -193,6 +228,25 @@ if(RIVA_BUILD_TESTS)
   )
 
   add_test(NAME riva_plugin_structure_tests COMMAND riva_plugin_structure_tests)
+  set_tests_properties(riva_plugin_structure_tests PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+
+  if(UNIX)
+    add_test(
+      NAME riva_ue54_verify_requires_engine
+      COMMAND bash -c "unset UE_ROOT; '${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify-ue54-plugin.sh'"
+    )
+    set_tests_properties(riva_ue54_verify_requires_engine PROPERTIES WILL_FAIL TRUE)
+
+    add_test(
+      NAME riva_fuzz_demo_integrity
+      COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/fuzz_demo_test.sh"
+    )
+    set_tests_properties(riva_fuzz_demo_integrity PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+  endif()
 
   add_executable(riva_trace_statistics_tests
     tests/trace_statistics_test.cpp
@@ -238,3 +292,46 @@ if(RIVA_BUILD_TESTS)
 
   add_test(NAME riva_pathology_validation_tests COMMAND riva_pathology_validation_tests)
 endif()
+
+if(RIVA_BUILD_FUZZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "RIVA_BUILD_FUZZERS requires a Clang compiler with libFuzzer")
+  endif()
+
+  add_executable(riva_fuzz_json_trace_loader
+    fuzz/targets/fuzz_json_trace_loader.cpp
+  )
+
+  target_link_libraries(riva_fuzz_json_trace_loader
+    PRIVATE
+      riva_core
+  )
+
+  target_compile_options(riva_fuzz_json_trace_loader
+    PRIVATE
+      -fsanitize=fuzzer,address,undefined
+      -fno-omit-frame-pointer
+      -g
+  )
+
+  target_link_options(riva_fuzz_json_trace_loader
+    PRIVATE
+      -fsanitize=fuzzer,address,undefined
+  )
+endif()
+
+include(GNUInstallDirs)
+install(
+  TARGETS riva_core
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+if(RIVA_BUILD_CLI)
+  install(TARGETS riva RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+install(
+  DIRECTORY ue/Plugins/RivaEditor/Source/RivaCore/Public/riva
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  FILES_MATCHING PATTERN "*.hpp"
+)

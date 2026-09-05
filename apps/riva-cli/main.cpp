@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "riva/analysis_engine.hpp"
+#include "riva/budget.hpp"
 #include "riva/builtin_signatures.hpp"
 #include "riva/json_trace_adapter.hpp"
 #include "riva/report_engine.hpp"
@@ -12,24 +13,54 @@
 #include "riva/trace_adapter_registry.hpp"
 #include "riva/trace_comparator.hpp"
 #include "riva/version.hpp"
-#include "riva/budget.hpp"
 
 namespace {
 
 int PrintUsage() {
-  std::cout << "Riva " << riva::Version() << "\n"
-            << "Deterministic Unreal Engine performance diagnostics companion.\n\n"
-            << "Usage:\n"
-            << "  riva analyze <trace_file> [options]\n"
-            << "  riva compare <baseline_trace> <new_trace> [options]\n"
-            << "  riva check-budget --budget <budget_file> --trace <trace_file>\n"
-            << "  riva version\n"
-            << "  riva --help\n\n"
-            << "Options for analyze:\n"
-            << "  --format, -f <markdown|json>   Report output format (default: markdown)\n"
-            << "  --output, -o <file_path>       Write report to file instead of standard output\n\n"
-            << "Options for compare:\n"
-            << "  --output, -o <file_path>       Write report to file instead of standard output\n";
+  std::cout
+      << "Riva " << riva::Version() << "\n"
+      << "Deterministic Unreal Engine performance diagnostics companion.\n\n"
+      << "Usage:\n"
+      << "  riva analyze <trace_file> [options]\n"
+      << "  riva compare <baseline_trace> <new_trace> [options]\n"
+      << "  riva check-budget --budget <budget_file> --trace <trace_file>\n"
+      << "  riva version\n"
+      << "  riva --help\n\n"
+      << "Options for analyze:\n"
+      << "  --format, -f <markdown|json>   Report output format (default: markdown)\n"
+      << "  --output, -o <file_path>       Write report to file instead of standard output\n\n"
+      << "Options for compare:\n"
+      << "  --output, -o <file_path>       Write report to file instead of standard output\n\n"
+      << "Exit codes:\n"
+      << "  0  Command completed and no gate failed\n"
+      << "  1  Load, analysis, report, or output error\n"
+      << "  2  Invalid command-line usage\n"
+      << "  3  Comparison regression or budget breach detected\n";
+  return 0;
+}
+
+int WriteReport(const std::string& output_path, const std::string& report_output) {
+  if (output_path.empty()) {
+    std::cout << report_output;
+    std::cout.flush();
+    if (!std::cout) {
+      std::cerr << "Error: Could not write report to standard output.\n";
+      return 1;
+    }
+    return 0;
+  }
+
+  std::ofstream out_file(output_path);
+  if (!out_file.is_open()) {
+    std::cerr << "Error: Could not open output file '" << output_path << "' for writing.\n";
+    return 1;
+  }
+  out_file << report_output;
+  out_file.close();
+  if (!out_file) {
+    std::cerr << "Error: Could not finish writing output file '" << output_path << "'.\n";
+    return 1;
+  }
   return 0;
 }
 
@@ -82,8 +113,8 @@ int RunAnalyze(int argc, char** argv) {
 
   const auto load_result = registry.Load(trace_path);
   if (!load_result.status.ok()) {
-    std::cerr << "Error loading trace '" << trace_path << "': "
-              << load_result.status.message() << "\n";
+    std::cerr << "Error loading trace '" << trace_path << "': " << load_result.status.message()
+              << "\n";
     return 1;
   }
 
@@ -97,27 +128,15 @@ int RunAnalyze(int argc, char** argv) {
 
   riva::FReportOptions report_options;
   std::string report_output;
-  const auto report_status = riva::FReportEngine::GenerateReport(
-      format, analysis_result, report_options, report_output);
+  const auto report_status =
+      riva::FReportEngine::GenerateReport(format, analysis_result, report_options, report_output);
 
   if (!report_status.ok()) {
     std::cerr << "Error generating report: " << report_status.message() << "\n";
     return 1;
   }
 
-  if (!output_path.empty()) {
-    std::ofstream out_file(output_path);
-    if (!out_file.is_open()) {
-      std::cerr << "Error: Could not open output file '" << output_path << "' for writing.\n";
-      return 1;
-    }
-    out_file << report_output;
-    out_file.close();
-  } else {
-    std::cout << report_output;
-  }
-
-  return 0;
+  return WriteReport(output_path, report_output);
 }
 
 int RunCompare(int argc, char** argv) {
@@ -155,15 +174,15 @@ int RunCompare(int argc, char** argv) {
 
   const auto baseline_load = registry.Load(baseline_path);
   if (!baseline_load.status.ok() || !baseline_load.trace.has_value()) {
-    std::cerr << "Error loading baseline trace '" << baseline_path << "': "
-              << baseline_load.status.message() << "\n";
+    std::cerr << "Error loading baseline trace '" << baseline_path
+              << "': " << baseline_load.status.message() << "\n";
     return 1;
   }
 
   const auto new_load = registry.Load(new_path);
   if (!new_load.status.ok() || !new_load.trace.has_value()) {
-    std::cerr << "Error loading new trace '" << new_path << "': "
-              << new_load.status.message() << "\n";
+    std::cerr << "Error loading new trace '" << new_path << "': " << new_load.status.message()
+              << "\n";
     return 1;
   }
 
@@ -172,8 +191,8 @@ int RunCompare(int argc, char** argv) {
   const auto new_result = engine.Analyze(*new_load.trace);
 
   riva::DefaultTraceComparator comparator;
-  const auto comparison_result = comparator.Compare(
-      *baseline_load.trace, baseline_result, *new_load.trace, new_result);
+  const auto comparison_result =
+      comparator.Compare(*baseline_load.trace, baseline_result, *new_load.trace, new_result);
 
   riva::FReportOptions report_options;
   std::string report_output;
@@ -185,19 +204,14 @@ int RunCompare(int argc, char** argv) {
     return 1;
   }
 
-  if (!output_path.empty()) {
-    std::ofstream out_file(output_path);
-    if (!out_file.is_open()) {
-      std::cerr << "Error: Could not open output file '" << output_path << "' for writing.\n";
-      return 1;
-    }
-    out_file << report_output;
-    out_file.close();
-  } else {
-    std::cout << report_output;
+  const int write_status = WriteReport(output_path, report_output);
+  if (write_status != 0) {
+    return write_status;
   }
 
-  return 0;
+  return comparison_result.statistics.bOverallRegressed || !comparison_result.regressions.empty()
+             ? 3
+             : 0;
 }
 
 int RunCheckBudget(int argc, char** argv) {
@@ -231,8 +245,9 @@ int RunCheckBudget(int argc, char** argv) {
   }
 
   auto budget_result = riva::LoadBudgetConfigFromJsonFile(budget_path);
-  if (!budget_result.status.ok()) {
-    std::cerr << "Error loading budget '" << budget_path << "': " << budget_result.status.message() << "\n";
+  if (!budget_result.status.ok() || !budget_result.config.has_value()) {
+    std::cerr << "Error loading budget '" << budget_path << "': " << budget_result.status.message()
+              << "\n";
     return 1;
   }
 
@@ -241,7 +256,8 @@ int RunCheckBudget(int argc, char** argv) {
 
   const auto load_result = registry.Load(trace_path);
   if (!load_result.status.ok()) {
-    std::cerr << "Error loading trace '" << trace_path << "': " << load_result.status.message() << "\n";
+    std::cerr << "Error loading trace '" << trace_path << "': " << load_result.status.message()
+              << "\n";
     return 1;
   }
 
@@ -251,9 +267,9 @@ int RunCheckBudget(int argc, char** argv) {
   }
 
   riva::AnalysisConfig config;
-  config.budget = budget_result.config;
+  config.budget = *budget_result.config;
 
-  riva::AnalysisEngine engine(riva::CreateBuiltinSignatures(), std::move(config));
+  riva::AnalysisEngine engine(riva::CreateBuiltinSignatures(), config);
   const auto analysis_result = engine.Analyze(*load_result.trace);
 
   if (analysis_result.budget_status.breached) {

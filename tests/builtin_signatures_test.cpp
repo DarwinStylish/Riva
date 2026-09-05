@@ -1,10 +1,11 @@
+#include "riva/builtin_signatures.hpp"
+
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "riva/builtin_signatures.hpp"
 #include "riva/normalized_trace.hpp"
 #include "riva/signature_result.hpp"
 #include "riva/spike_detector.hpp"
@@ -28,7 +29,7 @@ riva::TraceEvent MakeEvent(std::string name, std::uint64_t start_us, std::uint64
   return event;
 }
 
-riva::NormalizedTrace MakeTraceWithSpikeEvent(std::string event_name) {
+riva::NormalizedTrace MakeTraceWithSpikeEvent(const std::string& event_name) {
   riva::NormalizedTrace trace("signature-test");
 
   for (std::size_t i = 0; i < 6; ++i) {
@@ -60,8 +61,7 @@ std::vector<riva::Spike> DetectSpikes(const riva::NormalizedTrace& trace) {
 }
 
 bool HasFinding(const std::vector<std::unique_ptr<riva::ISignature>>& signatures,
-                const riva::NormalizedTrace& trace,
-                const std::vector<riva::Spike>& spikes,
+                const riva::NormalizedTrace& trace, const std::vector<riva::Spike>& spikes,
                 const std::string& id) {
   for (const auto& signature : signatures) {
     if (signature->id() != id) {
@@ -76,7 +76,7 @@ bool HasFinding(const std::vector<std::unique_ptr<riva::ISignature>>& signatures
       for (const auto& ev : findings[0].evidence) {
         // Verify classification is not left at an invalid state; it should be kObserved or kDerived
         Expect(ev.classification == riva::EEvidenceClassification::kObserved ||
-               ev.classification == riva::EEvidenceClassification::kDerived,
+                   ev.classification == riva::EEvidenceClassification::kDerived,
                "evidence classification must be OBSERVED or DERIVED for builtin signatures");
       }
       return true;
@@ -145,8 +145,7 @@ void TestMarkerDrivenSignatures() {
   {
     auto trace = MakeTraceWithSpikeEvent("GarbageCollect mark sweep");
     auto spikes = DetectSpikes(trace);
-    Expect(HasFinding(signatures, trace, spikes, "STUT_GC"),
-           "gc marker must produce finding");
+    Expect(HasFinding(signatures, trace, spikes, "STUT_GC"), "gc marker must produce finding");
   }
 
   {

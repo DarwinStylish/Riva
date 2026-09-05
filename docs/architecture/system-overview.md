@@ -4,7 +4,6 @@ Riva is structured into two main decoupled layers:
 1. **`riva_core`**: A pure C++20 static library containing trace models, signature algorithms, resolvers, comparator, budget parser, and reporting engine.
 2. **`RivaEditor`**: An Unreal Engine Editor plugin exposing a native Slate UI panel (`SRivaPanel`) and TraceServices loader (`FRivaTraceService`).
 
----
 
 ## Subsystem Architecture Diagram
 
@@ -41,7 +40,7 @@ graph TD
     CLI -->|Executes Budget Check| BE
     CLI -->|Runs Compare Diff| TC
     CLI -->|Generates Markdown/JSON| RE
-    UI -->|Displays Findings & Insights Sync| RE
+    UI -->|Displays Findings| RE
 
     style Core_Lib fill:#1E293B,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC
     style UE_Plugin fill:#0F172A,stroke:#34D399,stroke-width:2px,color:#F8FAFC
@@ -50,10 +49,9 @@ graph TD
 
 ### Strict Decoupling Rules
 
-- **Zero Unreal Headers in Core**: All code in `include/riva/` and `src/` relies exclusively on standard C++20 headers.
+- **Zero Unreal Headers in Diagnostic Core**: Code under `RivaCore/Public/riva` and the algorithm sources under `RivaCore/Private` rely on standard C++20. Only `RivaCoreModule.cpp` includes the Unreal module bootstrap header.
 - **Normalized Data Model**: Native Unreal Insights recordings (`.utrace`) and JSON trace exports are translated into `riva::NormalizedTrace` before diagnostic processing.
 
----
 
 ## Core Diagnostics Pipeline
 
@@ -61,9 +59,9 @@ When `AnalysisEngine::Analyze(const NormalizedTrace& trace)` is executed, data f
 
 ```mermaid
 flowchart TD
-    A["NormalizedTrace<br/>(Frames, Durations, Markers)"] --> B["1. Rolling Median Spike Detector<br/>(Identifies hitch windows)"]
+    A["NormalizedTrace<br/>(Frames, Durations, Optional Events)"] --> B["1. Rolling Median Spike Detector<br/>(Identifies hitch windows)"]
     B --> C["2. ISignature Rule Engine<br/>(GC, Shader, PSO, IO, RHI, GT/RT, GPU)"]
-    C --> D["3. CausalChainResolver<br/>(Links root causes & demotes symptoms)"]
+    C --> D["3. CausalChainResolver<br/>(Relates likely causes & concurrent symptoms)"]
     D --> E["4. ConfidenceResolver<br/>(Scores findings & assigns Primary/Secondary)"]
     E --> F["5. CorrelationResolver<br/>(Clusters repetitive temporal hitches)"]
     F --> S["6. Performance Score & Trace Statistics<br/>(Calculates P95s and 0-100 grade)"]
@@ -81,12 +79,30 @@ flowchart TD
 
 1. **SpikeDetector**: Evaluates frame duration metrics using a rolling median window to pinpoint hitch frames and calculate timing windows.
 2. **Signature Rules**: Evaluates registered `ISignature` implementations (`STUT_GC`, `STUT_SHADER_COMPILE`, `STUT_PSO_MISS`, etc.) against spike windows and frame event markers.
-3. **Causal Graph**: Resolves inter-dependencies (e.g. streaming IO triggering Game Thread stalls or RHI sync waits) and elevates root cause confidence.
+3. **Causal Graph**: Applies explicit timing and evidence rules to relate possible causes and concurrent symptoms (for example, streaming IO near a Game Thread stall) and adjusts confidence. These are ranked diagnostic hypotheses, not proof of causation.
 4. **Confidence Scoring**: Assigns calibrated confidence scores based on evidence weight and selects the `Primary` finding per hitch frame.
 5. **Correlation Clustering**: Coalesces repetitive spikes across temporal windows into composite cluster findings.
-6. **Performance Scoring**: Evaluates the full trace to compute `FTraceStatistics` (P50/P90/P95/P99) and deterministically assigns an `FPerformanceScore` (0-100 and A-F grades) based on budget breaches and hitch density.
+6. **Performance Scoring**: Evaluates available trace metrics to compute `FTraceStatistics` (P50/P90/P95/P99) and assigns an `FPerformanceScore` (0-100 and A-F grades) from score targets and hitch density. Missing subsystem telemetry is reported as `N/A`; project budget evaluation is a separate gate.
 
----
+
+## Verification and Integration Boundary
+
+Riva separates the analysis path from the evidence required to claim Unreal Engine package compatibility.
+
+```mermaid
+flowchart LR
+    J[JSON trace] --> N[NormalizedTrace]
+    T[Native .utrace] --> TS[RivaEditor / TraceServices]
+    TS --> N
+    N --> C[Deterministic C++20 core]
+    C --> F[Evidence-ranked findings and reports]
+    C --> G[Comparison and budget gates]
+    V1[Standalone CMake and CTest] --> C
+    V2[UE 5.4 RunUAT BuildPlugin] --> P[Package compatibility evidence]
+    P -.-> TS
+```
+
+Standalone CMake and CTest verification covers the portable core, CLI, deterministic fixtures, gates, and source-level plugin contracts. A successful UE 5.4 `RunUAT BuildPlugin` execution is separately required before Riva claims engine-level package compatibility.
 
 ## Evidence Classification Taxonomy
 
@@ -99,8 +115,7 @@ To uphold the "Claim Discipline" of the engine, every piece of evidence attached
 - `SUSPECTED`: Low-confidence hypotheses requiring manual confirmation.
 - `RECOMMENDED`: Actionable next steps provided by the rule engine.
 
----
 
 ## Synthetic Telemetry Generation
 
-The `TraceSynthesizer` provides a deterministic ground-truth generation engine for creating pathological traces (e.g., forcing a PSO miss at frame 60). This enables strict accuracy regression testing (the Validation Suite) and allows testing the UI against exact performance scenarios without hunting for real-world trace files.
+The `TraceSynthesizer` creates deterministic controlled fixtures with injected pathologies (for example, a PSO-miss event at frame 60). These fixtures support repeatable rule and UI regression tests. They do not establish real-world diagnostic accuracy; that requires representative captured traces and independently reviewed labels.

@@ -28,7 +28,8 @@ riva::NormalizedTrace MakeUniformTrace(std::size_t count, double duration_ms) {
     frame.game_thread_ms = duration_ms * 0.625;
     frame.render_thread_ms = duration_ms * 0.5;
     frame.gpu_ms = duration_ms * 0.7;
-    (void)trace.AddFrame(std::move(frame));
+    Expect(trace.AddFrame(std::move(frame)).ok(),
+           "uniform test frame must be accepted");
   }
   return trace;
 }
@@ -52,7 +53,7 @@ void TestSingleFrame() {
   frame.start_time_us = 0;
   frame.duration_ms = 16.0;
   frame.game_thread_ms = 10.0;
-  (void)trace.AddFrame(std::move(frame));
+  Expect(trace.AddFrame(std::move(frame)).ok(), "single test frame must be accepted");
 
   auto stats = riva::ComputeTraceStatistics(trace);
   Expect(stats.total_frames == 1, "single frame total must be 1");
@@ -91,7 +92,7 @@ void TestPercentilesWithSpikes() {
     frame.game_thread_ms = frame.duration_ms * 0.625;
     frame.render_thread_ms = frame.duration_ms * 0.5;
     frame.gpu_ms = frame.duration_ms * 0.7;
-    (void)trace.AddFrame(std::move(frame));
+    Expect(trace.AddFrame(std::move(frame)).ok(), "spiky test frame must be accepted");
   }
 
   auto stats = riva::ComputeTraceStatistics(trace);

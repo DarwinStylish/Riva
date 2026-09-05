@@ -2,7 +2,6 @@
 
 The Riva Command Line Interface (`riva`) is a standalone C++20 executable designed for automated trace analysis, performance budget gatekeeping, and regression testing in Continuous Integration (CI/CD) pipelines.
 
----
 
 ## Command Reference
 
@@ -25,7 +24,7 @@ riva analyze <trace_file> [options]
 
 ```bash
 # Output Markdown report to stdout
-./build/riva analyze samples/spike_shader_compile.json
+./build/release/riva analyze samples/spike_shader_compile.json
 
 # Example Output Snippet:
 # ## Performance Summary
@@ -35,10 +34,14 @@ riva analyze <trace_file> [options]
 
 
 # Save JSON report to file (includes 'statistics' and 'performance_score' blocks)
-./build/riva analyze samples/spike_shader_compile.json --format json --output report.json
+./build/release/riva analyze samples/spike_shader_compile.json --format json --output report.json
 ```
 
----
+The JSON loader rejects inputs larger than 64 MiB and documents nested more
+than 128 levels deep. These defensive defaults bound memory and stack use for
+untrusted CI artifacts; library callers can choose stricter limits through
+`JsonTraceLoaderOptions`.
+
 
 ### 2. `riva compare`
 
@@ -57,10 +60,9 @@ riva compare <baseline_trace> <new_trace> [options]
 #### Example
 
 ```bash
-./build/riva compare samples/spike_shader_compile.json samples/spike_pso_miss.json --output comparison.md
+./build/release/riva compare samples/spike_shader_compile.json samples/spike_pso_miss.json --output comparison.md
 ```
 
----
 
 ### 3. `riva check-budget`
 
@@ -73,32 +75,29 @@ riva check-budget --budget <budget_file> --trace <trace_file>
 #### Example
 
 ```bash
-./build/riva check-budget --budget samples/sample_budget.json --trace samples/spike_cpu_game_thread.json
+./build/release/riva check-budget --budget samples/sample_budget.json --trace samples/spike_cpu_game_thread.json
 ```
 
----
 
 ### 4. `riva version`
 
 Prints product name and version number.
 
 ```bash
-./build/riva version
+./build/release/riva version
 # Output: Riva 0.2.0
 ```
 
----
 
 ## Exit Codes Reference
 
 | Exit Code | Meaning | Usage Scenario |
 |---|---|---|
-| `0` | **Success** | Analysis finished successfully; or budget check passed without breaches. |
+| `0` | **Success** | Command completed and no comparison or budget gate failed. |
 | `1` | **Runtime / I/O Error** | Missing trace file, invalid JSON syntax, or internal loading failure. |
-| `2` | **Invalid Command / Usage** | Unknown CLI flag, missing mandatory parameters, or `--help` requested. |
-| `3` | **Budget Breached** | `check-budget` completed and detected one or more exceeded metric thresholds. |
+| `2` | **Invalid Command / Usage** | Unknown CLI flag or missing mandatory parameters. |
+| `3` | **Gate Failed** | `compare` detected a regression or `check-budget` detected a breach. |
 
----
 
 ## Continuous Integration Setup
 
@@ -116,19 +115,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build Riva CLI
         run: |
-          cmake -S . -B build
-          cmake --build build --target riva -j
+          cmake --preset release
+          cmake --build --preset release --target riva
 
       - name: Run Budget Check
         run: |
-          ./build/riva check-budget --budget config/budgets.json --trace test_runs/latest.json
+          ./build/release/riva check-budget --budget config/budgets.json --trace test_runs/latest.json
 
       - name: Run Regression Diffing
         if: always()
         run: |
-          ./build/riva compare test_runs/baseline.json test_runs/latest.json --output pr_diff.md
+          ./build/release/riva compare test_runs/baseline.json test_runs/latest.json --output pr_diff.md
 ```

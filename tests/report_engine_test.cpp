@@ -1,11 +1,13 @@
+#include "riva/report_engine.hpp"
+
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
 #include "riva/analysis_result.hpp"
 #include "riva/finding.hpp"
-#include "riva/report_engine.hpp"
 #include "riva/trace_comparator.hpp"
 
 namespace {
@@ -35,7 +37,8 @@ riva::AnalysisResult MakeSampleResult() {
   f1.frame_index = 42;
   f1.time_window_start_us = 672000;
   f1.time_window_end_us = 722000;
-  f1.evidence.push_back(riva::Evidence{"gpu_ms", "50.00 ms", riva::EEvidenceClassification::kObserved});
+  f1.evidence.push_back(
+      riva::Evidence{"gpu_ms", "50.00 ms", riva::EEvidenceClassification::kObserved});
   f1.suggested_next_steps.push_back("Check GPU pass breakdown in Unreal Insights.");
   f1.how_to_confirm.push_back("Verify GPU timing lane exceeds 33ms threshold.");
   f1.affected_thread = "GPU";
@@ -55,7 +58,8 @@ riva::AnalysisResult MakeSampleResult() {
   f2.frame_index = 42;
   f2.time_window_start_us = 675000;
   f2.time_window_end_us = 680000;
-  f2.evidence.push_back(riva::Evidence{"gc_ms", "5.00 ms", riva::EEvidenceClassification::kDerived});
+  f2.evidence.push_back(
+      riva::Evidence{"gc_ms", "5.00 ms", riva::EEvidenceClassification::kDerived});
   f2.suggested_next_steps.push_back("Check UObject allocation rate.");
   f2.how_to_confirm.push_back("Look for GarbageCollect event on GameThread.");
   f2.affected_thread = "GameThread";
@@ -82,7 +86,8 @@ void TestMarkdownReportWithFindings() {
   Expect(Contains(markdown, "# Riva Performance Diagnostic Report"), "Should contain title");
   Expect(Contains(markdown, "## Executive Summary"), "Should contain Executive Summary");
   Expect(Contains(markdown, "- **Source**: report-engine-test"), "Should contain source name");
-  Expect(Contains(markdown, "- **Total Frames Analyzed**: 120"), "Should contain total frames analyzed");
+  Expect(Contains(markdown, "- **Total Frames Analyzed**: 120"),
+         "Should contain total frames analyzed");
   Expect(Contains(markdown, "- **Frame Hitch Count**: 3"), "Should contain hitch count");
   Expect(Contains(markdown, "- **Primary Stall Classification**: Heavy GPU Render Stall"),
          "Should contain primary stall classification");
@@ -92,19 +97,27 @@ void TestMarkdownReportWithFindings() {
          "Should contain primary finding header");
   Expect(Contains(markdown, "- **Role**: Primary"), "Should indicate Primary role");
   Expect(Contains(markdown, "- **Confidence**: 90.0%"), "Should format confidence percentage");
-  Expect(Contains(markdown, "- **Time Window**: 672000 us - 722000 us"), "Should format time window");
-  Expect(Contains(markdown, "- **Resolution Note**: Selected as primary bottleneck."), "Should include resolution note");
+  Expect(Contains(markdown, "- **Time Window**: 672000 us - 722000 us"),
+         "Should format time window");
+  Expect(Contains(markdown, "- **Resolution Note**: Selected as primary bottleneck."),
+         "Should include resolution note");
 
   Expect(Contains(markdown, "#### Evidence Breakdown"), "Should contain Evidence Breakdown");
-  Expect(Contains(markdown, "- `gpu_ms` [OBSERVED]: 50.00 ms"), "Should format evidence item with classification");
-  Expect(Contains(markdown, "- **Affected Thread**: GPU"), "Should contain affected thread in Markdown");
-  Expect(Contains(markdown, "- **Affected System**: Rendering"), "Should contain affected system in Markdown");
+  Expect(Contains(markdown, "- `gpu_ms` [OBSERVED]: 50.00 ms"),
+         "Should format evidence item with classification");
+  Expect(Contains(markdown, "- **Affected Thread**: GPU"),
+         "Should contain affected thread in Markdown");
+  Expect(Contains(markdown, "- **Affected System**: Rendering"),
+         "Should contain affected system in Markdown");
 
   Expect(Contains(markdown, "#### Actionable Guidance"), "Should contain Actionable Guidance");
   Expect(Contains(markdown, "- **Suggested Next Steps**:"), "Should contain Suggested Next Steps");
-  Expect(Contains(markdown, "1. Check GPU pass breakdown in Unreal Insights."), "Should contain next step text");
-  Expect(Contains(markdown, "- **How to Confirm in Unreal Insights**:"), "Should contain How to Confirm section");
-  Expect(Contains(markdown, "1. Verify GPU timing lane exceeds 33ms threshold."), "Should contain confirm instruction");
+  Expect(Contains(markdown, "1. Check GPU pass breakdown in Unreal Insights."),
+         "Should contain next step text");
+  Expect(Contains(markdown, "- **How to Confirm in Unreal Insights**:"),
+         "Should contain How to Confirm section");
+  Expect(Contains(markdown, "1. Verify GPU timing lane exceeds 33ms threshold."),
+         "Should contain confirm instruction");
 }
 
 void TestJsonReportWithFindings() {
@@ -116,8 +129,10 @@ void TestJsonReportWithFindings() {
   Expect(status.ok(), "GenerateJsonReport should succeed");
   Expect(!json.empty(), "JSON report should not be empty");
 
-  Expect(Contains(json, "\"report_title\": \"Riva Performance Diagnostic Report\""), "Should contain JSON title");
-  Expect(Contains(json, "\"source_name\": \"report-engine-test\""), "Should contain JSON source name");
+  Expect(Contains(json, "\"report_title\": \"Riva Performance Diagnostic Report\""),
+         "Should contain JSON title");
+  Expect(Contains(json, "\"source_name\": \"report-engine-test\""),
+         "Should contain JSON source name");
   Expect(Contains(json, "\"executive_summary\": {"), "Should contain JSON executive summary");
   Expect(Contains(json, "\"total_frames_analyzed\": 120"), "Should contain JSON total frames");
   Expect(Contains(json, "\"hitch_count\": 3"), "Should contain JSON hitch count");
@@ -132,11 +147,14 @@ void TestJsonReportWithFindings() {
   Expect(Contains(json, "\"evidence\": ["), "Should contain evidence array in JSON");
   Expect(Contains(json, "\"label\": \"gpu_ms\""), "Should contain evidence label in JSON");
   Expect(Contains(json, "\"value\": \"50.00 ms\""), "Should contain evidence value in JSON");
-  Expect(Contains(json, "\"classification\": \"OBSERVED\""), "Should contain evidence classification in JSON");
+  Expect(Contains(json, "\"classification\": \"OBSERVED\""),
+         "Should contain evidence classification in JSON");
   Expect(Contains(json, "\"affected_thread\": \"GPU\""), "Should contain affected_thread in JSON");
-  Expect(Contains(json, "\"affected_system\": \"Rendering\""), "Should contain affected_system in JSON");
+  Expect(Contains(json, "\"affected_system\": \"Rendering\""),
+         "Should contain affected_system in JSON");
   Expect(Contains(json, "\"how_to_confirm\": ["), "Should contain how_to_confirm array in JSON");
-  Expect(Contains(json, "\"Verify GPU timing lane exceeds 33ms threshold.\""), "Should contain confirm string in JSON");
+  Expect(Contains(json, "\"Verify GPU timing lane exceeds 33ms threshold.\""),
+         "Should contain confirm string in JSON");
 }
 
 void TestEmptyFindingsReport() {
@@ -176,17 +194,21 @@ void TestReportOptionsToggles() {
 
   auto status = riva::FReportEngine::GenerateMarkdownReport(result, options, markdown);
   Expect(status.ok(), "GenerateMarkdownReport with toggles should succeed");
-  Expect(!Contains(markdown, "# Riva Performance Diagnostic Report"), "Should omit title when metadata false");
+  Expect(!Contains(markdown, "# Riva Performance Diagnostic Report"),
+         "Should omit title when metadata false");
   Expect(!Contains(markdown, "## Executive Summary"), "Should omit Executive Summary when false");
-  Expect(!Contains(markdown, "#### Evidence Breakdown"), "Should omit Evidence Breakdown when false");
-  Expect(!Contains(markdown, "#### Actionable Guidance"), "Should omit Actionable Guidance when false");
+  Expect(!Contains(markdown, "#### Evidence Breakdown"),
+         "Should omit Evidence Breakdown when false");
+  Expect(!Contains(markdown, "#### Actionable Guidance"),
+         "Should omit Actionable Guidance when false");
 
   status = riva::FReportEngine::GenerateJsonReport(result, options, json);
   Expect(status.ok(), "GenerateJsonReport with toggles should succeed");
   Expect(!Contains(json, "\"report_title\""), "Should omit report_title when metadata false");
   Expect(!Contains(json, "\"executive_summary\""), "Should omit executive_summary when false");
   Expect(!Contains(json, "\"evidence\""), "Should omit evidence array when false");
-  Expect(!Contains(json, "\"suggested_next_steps\""), "Should omit suggested_next_steps when false");
+  Expect(!Contains(json, "\"suggested_next_steps\""),
+         "Should omit suggested_next_steps when false");
   Expect(!Contains(json, "\"how_to_confirm\""), "Should omit how_to_confirm when false");
 }
 
@@ -195,26 +217,28 @@ void TestGenerateReportHelper() {
   riva::FReportOptions options;
 
   std::string md_out;
-  auto status = riva::FReportEngine::GenerateReport(riva::EReportFormat::kMarkdown, result, options, md_out);
+  auto status =
+      riva::FReportEngine::GenerateReport(riva::EReportFormat::kMarkdown, result, options, md_out);
   Expect(status.ok(), "GenerateReport kMarkdown should succeed");
   Expect(Contains(md_out, "## Executive Summary"), "Helper should generate valid Markdown");
 
   std::string json_out;
-  status = riva::FReportEngine::GenerateReport(riva::EReportFormat::kJson, result, options, json_out);
+  status =
+      riva::FReportEngine::GenerateReport(riva::EReportFormat::kJson, result, options, json_out);
   Expect(status.ok(), "GenerateReport kJson should succeed");
   Expect(Contains(json_out, "\"executive_summary\""), "Helper should generate valid JSON");
 }
 
 void TestGenerateComparisonReport() {
   riva::ComparisonResult result;
-  
+
   riva::Finding f1;
   f1.id = "STUT_SHADER_COMPILE";
   f1.title = "Shader Compilation Stall";
   f1.severity = riva::Severity::kCritical;
   f1.confidence = 0.95;
   f1.frame_index = 10;
-  
+
   riva::ResolvedFinding rf1;
   rf1.finding = f1;
   rf1.role = riva::FindingRole::kPrimary;
@@ -226,7 +250,7 @@ void TestGenerateComparisonReport() {
   f2.severity = riva::Severity::kWarning;
   f2.confidence = 0.80;
   f2.frame_index = 15;
-  
+
   riva::ResolvedFinding rf2;
   rf2.finding = f2;
   rf2.role = riva::FindingRole::kPrimary;
@@ -235,7 +259,7 @@ void TestGenerateComparisonReport() {
   riva::FReportOptions options;
   std::string markdown;
   const auto status = riva::FReportEngine::GenerateComparisonReport(result, options, markdown);
-  
+
   Expect(status.ok(), "GenerateComparisonReport should succeed");
   Expect(Contains(markdown, "Trace Comparison"), "Should contain Trace Comparison header");
   Expect(Contains(markdown, "## Executive Summary"), "Should contain Executive Summary");
@@ -297,10 +321,12 @@ void TestPerformanceSummaryInMarkdown() {
   result.statistics.hitch_percentage = 3.0;
 
   // Populate score
+  result.score.has_data = true;
   result.score.overall = 78.0;
   result.score.overall_grade = "C";
   riva::FSubsystemScore gt;
   gt.name = "Game Thread";
+  gt.has_data = true;
   gt.score = 72;
   gt.grade = "C";
   gt.deductions.push_back("P95 exceeds target by 5.6 ms");
@@ -337,10 +363,12 @@ void TestStatisticsAndScoreInJson() {
   result.statistics.max_ms = 20.0;
   result.statistics.mean_ms = 15.8;
 
+  result.score.has_data = true;
   result.score.overall = 95.0;
   result.score.overall_grade = "A";
   riva::FSubsystemScore gpu;
   gpu.name = "GPU";
+  gpu.has_data = true;
   gpu.score = 92.0;
   gpu.grade = "A";
   result.score.subsystems.push_back(gpu);
@@ -360,6 +388,29 @@ void TestStatisticsAndScoreInJson() {
   Expect(Contains(json, "\"GPU\""), "JSON should contain GPU subsystem");
 }
 
+void TestJsonEscapesControlCharactersAndNonFiniteNumbers() {
+  riva::AnalysisResult result;
+  result.source_name = std::string("source\x01", 7);
+  result.total_frames_analyzed = 1;
+
+  riva::Finding finding;
+  finding.id = "CONTROL";
+  finding.title = "line\nbreak";
+  finding.confidence = std::numeric_limits<double>::quiet_NaN();
+  riva::ResolvedFinding resolved;
+  resolved.finding = std::move(finding);
+  result.findings.push_back(std::move(resolved));
+
+  std::string json;
+  const auto status = riva::FReportEngine::GenerateJsonReport(result, riva::FReportOptions{}, json);
+  Expect(status.ok(), "JSON edge-case report should succeed");
+  Expect(Contains(json, "source\\u0001"),
+         "JSON must escape control bytes not covered by short escapes");
+  Expect(Contains(json, "line\\nbreak"), "JSON must escape newlines in strings");
+  Expect(Contains(json, "\"confidence\": null"),
+         "JSON must never serialize non-finite numbers as invalid JSON tokens");
+}
+
 }  // namespace
 
 int main() {
@@ -372,6 +423,7 @@ int main() {
   TestComparisonReportMetricSummary();
   TestPerformanceSummaryInMarkdown();
   TestStatisticsAndScoreInJson();
+  TestJsonEscapesControlCharactersAndNonFiniteNumbers();
   std::cout << "All report engine tests passed successfully!\n";
   return 0;
 }

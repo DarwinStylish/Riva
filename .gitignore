@@ -1,6 +1,9 @@
 # Build outputs
 build/
+build-*/
 cmake-build-*/
+artifacts/
+.demo/
 
 # CMake generated files
 CMakeCache.txt
@@ -8,6 +11,8 @@ CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
 Testing/
+*.gcda
+*.gcno
 
 # Binaries
 *.o
@@ -22,3 +27,8 @@ Testing/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated fuzz and local verification output
+fuzz/artifacts/
+tests/demo_test_output.txt
+tests/dummy_crash_artifact.bin

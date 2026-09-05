@@ -1,122 +1,193 @@
 # Riva
 
-**Riva** is a deterministic performance diagnostics companion for Unreal Engine. It analyzes trace recordings from Unreal Insights and JSON trace exports to automatically isolate performance hitches, score bottleneck confidence, resolve root causes, enforce performance budgets, and compare trace runs for regressions.
+**Riva is an open-source performance diagnostics companion for Unreal Engine that turns trace telemetry into deterministic, evidence-ranked findings, regression comparisons, and enforceable performance gates.**
 
----
+Riva complements Unreal Insights rather than replacing it. Unreal Insights remains the telemetry and timeline authority; Riva provides a local analysis layer for repeatable diagnostics, report generation, and build-pipeline automation.
 
-## Features
+## Status
 
-- **Deterministic Diagnostics Engine**: Rolling median spike detection with zero non-deterministic heuristics.
-- **Performance Scoring System**: Deterministic 0-100 grading with A-F letter grades and per-subsystem breakdowns (Game Thread, Render Thread, GPU, Physics, AI, Network).
-- **Quantitative Trace Comparison**: Diffs baseline vs. new trace runs and generates Metric Summary tables with P50/P90/P95/P99 deltas and hitch % regressions.
-- **Synthetic Telemetry Generation**: Built-in pathology generator to programmatically inject frame spikes (shader compile, PSO miss, GC, etc.) for testing and ground-truth validation.
-- **Root Cause & Causal Resolution**: Automatically links concurrent stalls (e.g. streaming IO or GC triggering Game Thread / RHI waits) and elevates root causes over symptomatic stalls.
-- **Multi-Spike Correlation**: Groups repetitive hitches into composite findings to prevent UI clutter.
-- **Performance Budgets**: Enforces strict frame-time constraints in CI/CD pipelines.
-- **Unreal Editor Plugin**: Native Slate companion tab (`SRivaPanel`) with non-blocking async analysis, bidirectional Unreal Insights selection synchronization, clipboard copy, and report export dialogs.
-- **Headless CLI Gatekeeper**: Pure C++20 executable (`riva`) with zero Unreal Engine dependencies for instant, lightweight automated testing.
+Riva is an early-stage prototype. The standalone C++20 core, CLI, JSON trace workflow, regression and budget gates, deterministic fixtures, sanitizer configuration, parser fuzzing, and cross-platform standalone CI are implemented and testable without Unreal Engine.
 
----
+The Unreal Editor integration targets UE 5.4 and includes a native Slate panel, asynchronous analysis, report export, and TraceServices-based `.utrace` ingestion. Native `.utrace` analysis currently normalizes frame boundaries and available timing-lane measurements. Named native event extraction is not implemented yet.
 
-## Architecture Overview
+The repository does not claim UE 5.4 package compatibility until `RunUAT BuildPlugin` succeeds against a real UE 5.4 installation.
 
-```mermaid
-graph TD
-    subgraph UE_Plugin["Unreal Editor Environment"]
-        UI["SRivaPanel (Slate UI)"]
-        TS["FRivaTraceService (TraceServices Loader)"]
-        UI -->|Ingestion| TS
-    end
+## What Riva does
 
-    subgraph CLI_Env["CI / CD Environment"]
-        CLI["riva (Standalone CLI)"]
-    end
+Riva normalizes supported trace data into a common model and runs it through a deterministic diagnostics pipeline:
 
-    subgraph Core_Lib["riva_core (Pure C++20 STL)"]
-        NT["NormalizedTrace"]
-        AE["AnalysisEngine"]
-        TC["TraceComparator"]
-        BE["BudgetEvaluator"]
-        RE["ReportEngine"]
-        TSy["TraceSynthesizer"]
-        PS["PerformanceScore"]
-        
-        AE --> NT
-        AE --> PS
-        TC --> AE
-        RE --> AE
-        TSy --> NT
-    end
+1. rolling-median spike detection;
+2. UE-oriented diagnostic signatures;
+3. evidence-relationship resolution;
+4. confidence ranking;
+5. multi-spike correlation;
+6. statistics, performance scoring, budget evaluation, and reporting.
 
-    TS -->|Ingests .utrace| NT
-    CLI -->|Ingests JSON| NT
-    CLI -->|Budget Check| BE
-    CLI -->|Trace Compare| TC
-    CLI -->|Generate Report| RE
-    UI -->|Displays Findings & Sync| RE
+Built-in signatures currently cover:
 
-    style Core_Lib fill:#1E293B,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC
-    style UE_Plugin fill:#0F172A,stroke:#34D399,stroke-width:2px,color:#F8FAFC
-    style CLI_Env fill:#0F172A,stroke:#F43F5E,stroke-width:2px,color:#F8FAFC
+- shader compilation stalls;
+- pipeline state object misses;
+- streaming and IO stalls;
+- garbage collection stalls;
+- Game Thread CPU spikes;
+- Render Thread CPU spikes;
+- RHI synchronization stalls;
+- GPU variance associated with Lumen or Virtual Shadow Maps.
+
+A primary finding is the highest-ranked supported diagnostic hypothesis in the implemented rule set. It is not presented as proof of causation. Reports retain evidence classifications and explicit confirmation guidance.
+
+## Current capabilities
+
+| Capability | Current state |
+|---|---|
+| Standalone C++20 diagnostic core | Implemented and covered by automated tests |
+| JSON trace ingestion | Implemented |
+| Markdown and JSON reports | Implemented |
+| Baseline-versus-new trace comparison | Implemented |
+| Performance budget gates | Implemented |
+| Stable CLI gate exit codes | Implemented |
+| Deterministic synthetic pathology fixtures | Implemented |
+| Parser fuzz target with ASan/UBSan | Implemented |
+| Unreal Editor Slate panel | Implemented in source |
+| Asynchronous editor analysis and report export | Implemented in source |
+| Native `.utrace` frame and timing-lane ingestion | Implemented, pending engine-level build validation |
+| Native named-event extraction | Planned |
+| Unreal Insights selection synchronization | Not implemented |
+| UE 5.4 `BuildPlugin` package proof | Pending a real UE 5.4 installation |
+
+## Architecture
+
+Riva keeps diagnostic logic independent of Unreal Engine headers.
+
+```text
+Unreal Editor / TraceServices             Standalone CLI / CI
+              |                                  |
+              v                                  v
+        source-specific ingestion and normalization
+                         |
+                         v
+                  NormalizedTrace
+                         |
+                         v
+        deterministic C++20 diagnostic core
+                         |
+            +------------+------------+
+            |                         |
+            v                         v
+     findings/reports          comparison/budgets
 ```
 
-### Architectural Rules
+The same core implementation under `ue/Plugins/RivaEditor/Source/RivaCore` is consumed by the Unreal plugin and built independently with CMake.
 
-- **Pure C++20 Core**: `include/riva/` and `src/` use modern C++20 standards.
-- **Zero Unreal Headers in Core**: `riva_core` is strictly decoupled from Unreal Engine headers for maximum portability and fast CI compilation.
-- **Deterministic Pipeline**: Diagnostic runs produce bit-for-bit identical findings across platforms given identical trace input.
+Architecture rationale is recorded in [docs/architecture](docs/architecture/index.md), including the normalized trace boundary, evidence-ranked diagnostics, and the TraceServices integration boundary.
 
----
+## Build
 
-## Quick Start
+Requirements:
 
-### Building & Running Tests
+- CMake 3.20 or newer;
+- a C++20 compiler.
+
+Configure, build, and test the strict release preset:
 
 ```bash
-# Configure build
-cmake -S . -B build
-
-# Build targets
-cmake --build build -j
-
-# Run full CTest suite (17 test executables)
-ctest --test-dir build --output-on-failure
+cmake --preset release
+cmake --build --preset release
+ctest --preset release
 ```
 
-### CLI Quick Usage
+Sanitizer verification on a supported GCC or Clang environment:
 
 ```bash
-# Analyze a trace and output Markdown report to stdout
-./build/riva analyze samples/spike_shader_compile.json
-
-# Export structured JSON report to a file
-./build/riva analyze samples/spike_shader_compile.json --format json --output report.json
-
-# Compare baseline vs. new trace run for regressions
-./build/riva compare samples/spike_shader_compile.json samples/spike_pso_miss.json
-
-# Check trace against performance budget rules
-./build/riva check-budget --budget samples/sample_budget.json --trace samples/spike_cpu_game_thread.json
+cmake --preset sanitizers
+cmake --build --preset sanitizers
+ctest --preset sanitizers
 ```
 
----
+See [Building and Packaging](docs/building.md) for configuration options, installation, and the separate Unreal Engine package-verification workflow.
+
+## CLI
+
+Analyze a trace:
+
+```bash
+./build/release/riva analyze samples/spike_shader_compile.json
+```
+
+Export JSON:
+
+```bash
+./build/release/riva analyze   samples/spike_shader_compile.json   --format json   --output report.json
+```
+
+Compare a baseline and a new trace:
+
+```bash
+./build/release/riva compare   samples/spike_cpu_game_thread.json   samples/spike_shader_compile.json
+```
+
+Apply a performance budget:
+
+```bash
+./build/release/riva check-budget   --budget samples/sample_budget.json   --trace samples/spike_shader_compile.json
+```
+
+Gate commands return exit code `3` when analysis succeeds but a regression or budget breach is detected. Operational failures and invalid command usage use separate exit codes documented in the [CLI guide](docs/user-guide/cli-usage.md).
 
 ## Documentation
 
-- **User Guides**:
-  - [CLI Usage & CI Automation](docs/user-guide/cli-usage.md)
-  - [Unreal Editor Plugin Guide](docs/user-guide/unreal-plugin.md)
-  - [Performance Budgets Guide](docs/user-guide/budgets-guide.md)
-  - [Trace Comparison Guide](docs/user-guide/trace-comparison.md)
-- **Architecture**:
-  - [System Overview & Pipeline Architecture](docs/architecture/system-overview.md)
-  - [Authoring Custom Signatures](docs/architecture/custom-signatures.md)
-- **Project Info**:
-  - [Contributing Guidelines](CONTRIBUTING.md)
-  - [Changelog](CHANGELOG.md)
+Architecture:
 
----
+- [Architecture index and decision records](docs/architecture/index.md)
+- [System overview and diagrams](docs/architecture/system-overview.md)
+- [Custom diagnostic signatures](docs/architecture/custom-signatures.md)
+
+Build and verification:
+
+- [Building and packaging](docs/building.md)
+- [Worked sample guide](docs/demo.md)
+- [Fuzz-testing demonstration](docs/demo/fuzz-demo.md)
+- [Verification boundary and reproducible evidence](docs/verification/README.md)
+
+Usage:
+
+- [CLI guide](docs/user-guide/cli-usage.md)
+- [Unreal Editor plugin guide](docs/user-guide/unreal-plugin.md)
+- [Trace comparison guide](docs/user-guide/trace-comparison.md)
+- [Performance budgets guide](docs/user-guide/budgets-guide.md)
+
+Project:
+
+- [Roadmap](docs/roadmap.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
+- [Apache License 2.0](LICENSE)
+- [Project notice](NOTICE)
+
+The architecture index links the accepted ADRs that define Riva's core boundaries and design rationale.
+
+## Roadmap
+
+Near-term work focuses on:
+
+- real UE 5.4 `BuildPlugin` validation and packaging;
+- native named-event extraction through TraceServices;
+- a redistributable corpus of genuine Unreal traces;
+- per-signature false-positive and false-negative evaluation;
+- reusable CI integration examples;
+- individually verified support for additional Unreal Engine versions.
+
+See the full [roadmap](docs/roadmap.md).
+
+## Contributing
+
+Contributions should preserve Riva's core constraints: deterministic behavior, explicit evidence semantics, source-format isolation, and truthful verification boundaries.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+Security-sensitive issues should follow [SECURITY.md](SECURITY.md).
 
 ## License
 
-Riva is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+Riva is licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

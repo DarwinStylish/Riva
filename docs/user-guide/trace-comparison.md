@@ -2,7 +2,6 @@
 
 The **Trace Compare** API and CLI capability enable game teams to structurally diff two trace analysis results, answering whether a new build introduced regressions, resolved an existing bottleneck, or left the performance baseline unchanged.
 
----
 
 ## How Comparison Works
 
@@ -10,7 +9,6 @@ The **Trace Compare** API and CLI capability enable game teams to structurally d
 2. **Primary Finding Isolation**: Comparison strictly operates on `kPrimary` findings identified via signature IDs (`STUT_GC`, `STUT_PSO_MISS`, etc.). This ensures that symptom differences (e.g. cascading secondary stalls) do not trigger false regressions.
 3. **Signature ID Matching**: Baseline findings and new trace findings are compared by signature ID to track resolved, regressed, or persistent issues.
 
----
 
 ## Finding Classifications
 
@@ -20,15 +18,18 @@ The **Trace Compare** API and CLI capability enable game teams to structurally d
 | **Improvements** | Present in `baseline`, NOT in `new_trace` | **Performance bottleneck resolved.** Validates optimization work. |
 | **Unchanged** | Present in BOTH `baseline` and `new_trace` | **Persistent issue.** Bottleneck remains unchanged across runs. |
 
----
 
 ## Running Comparison
 
 ### CLI Usage
 
 ```bash
-./build/riva compare <baseline_trace> <new_trace> [options]
+./build/release/riva compare <baseline_trace> <new_trace> [options]
 ```
+
+The command returns `3` when any primary finding or quantitative metric is
+classified as a regression. A successful comparison with no regression returns
+`0`; load, report, and output failures return `1`.
 
 #### Example Output Report
 
@@ -75,5 +76,10 @@ No unchanged findings.
 | Hitch % | 33.33% | 33.33% | +0.00% | +0.0% |
 | Game Thread P95 | 38.72 ms | 11.72 ms | -27.00 ms | -69.7% |
 | Render Thread P95 | 11.51 ms | 7.91 ms | -3.60 ms | -31.3% |
+| RHI Thread P95 | 0.00 ms | 0.00 ms | +0.00 ms | n/a (zero baseline) |
 | GPU P95 | 12.73 ms | 10.09 ms | -2.64 ms | -20.7% |
 ```
+
+Percentage change is reported as `n/a (zero baseline)` when a baseline metric
+is zero. A positive absolute increase from zero is still treated as a
+regression.
