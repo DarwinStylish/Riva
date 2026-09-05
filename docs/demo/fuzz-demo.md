@@ -1,6 +1,6 @@
 # Riva Fuzz-Testing Demonstration
 
-This document describes the native C++ fuzz-testing demonstration for Riva, designed to highlight the deterministic tracking and contextualization of software failures. 
+This document describes the native C++ fuzz-testing demonstration for Riva, designed to highlight the deterministic tracking and contextualization of software failures.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ This demonstration uses:
 
 ## Selected Fuzz Target
 
-The fuzz target directly exercises `riva::LoadNormalizedTraceFromJsonText` in `json_trace_loader.cpp`. 
+The fuzz target directly exercises `riva::LoadNormalizedTraceFromJsonText` in `json_trace_loader.cpp`.
 
 ### Why this target matters
 This function is a critical input boundary. It consumes externally generated
