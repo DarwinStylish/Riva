@@ -1,5 +1,4 @@
 using UnrealBuildTool;
-using System.IO;
 
 public class RivaEditor : ModuleRules
 {
@@ -12,13 +11,6 @@ public class RivaEditor : ModuleRules
             }
         );
 
-        PrivateIncludePaths.AddRange(
-            new string[] {
-                Path.Combine(ModuleDirectory, "Private"),
-                Path.GetFullPath(Path.Combine(PluginDirectory, "../../../include"))
-            }
-        );
-
         PublicDependencyModuleNames.AddRange(
             new string[] {
                 "Core",
@@ -27,6 +19,7 @@ public class RivaEditor : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(
             new string[] {
+                "RivaCore",
                 "CoreUObject",
                 "Engine",
                 "Slate",
