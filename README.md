@@ -134,19 +134,38 @@ Apply a performance budget:
 
 Gate commands return exit code `3` when analysis succeeds but a regression or budget breach is detected. Operational failures and invalid command usage use separate exit codes documented in the [CLI guide](docs/user-guide/cli-usage.md).
 
-## Worked examples and verification
+## Documentation
 
-The checked-in JSON traces are deterministic synthetic fixtures. They exercise known analysis branches and make regression behavior reproducible; they do not establish real-world diagnostic accuracy.
+Architecture:
 
-Start with:
+- [Architecture index and decision records](docs/architecture/index.md)
+- [System overview and diagrams](docs/architecture/system-overview.md)
+- [Custom diagnostic signatures](docs/architecture/custom-signatures.md)
 
+Build and verification:
+
+- [Building and packaging](docs/building.md)
 - [Worked sample guide](docs/demo.md)
+- [Fuzz-testing demonstration](docs/demo/fuzz-demo.md)
 - [Verification boundary and reproducible evidence](docs/verification/README.md)
+
+Usage:
+
+- [CLI guide](docs/user-guide/cli-usage.md)
 - [Unreal Editor plugin guide](docs/user-guide/unreal-plugin.md)
 - [Trace comparison guide](docs/user-guide/trace-comparison.md)
 - [Performance budgets guide](docs/user-guide/budgets-guide.md)
 
-The verification documentation deliberately separates standalone CMake/CTest evidence from Unreal Engine package validation.
+Project:
+
+- [Roadmap](docs/roadmap.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
+- [Apache License 2.0](LICENSE)
+- [Project notice](NOTICE)
+
+The architecture index links the accepted ADRs that define Riva's core boundaries and design rationale.
 
 ## Roadmap
 
