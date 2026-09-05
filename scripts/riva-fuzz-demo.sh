@@ -131,7 +131,7 @@ if [[ "$MODE" == "live" ]]; then
     "$EXECUTABLE" "$WORK_CORPUS" -artifact_prefix=fuzz/artifacts/json_trace_loader/ -max_total_time=10 2>&1 | tee "$LOG_DIR/fuzz.raw.log"
     FUZZ_EXIT=${PIPESTATUS[0]}
     set -e
-    
+
     if [[ $FUZZ_EXIT -eq 0 ]]; then
         echo ""
         echo -e "${GREEN}✓ Fuzzing completed without finding a crash in the allotted time.${RESET}"
@@ -158,7 +158,7 @@ elif [[ "$MODE" == "replay" ]]; then
     echo -e "This input was previously discovered by LLVM libFuzzer while"
     echo -e "exercising Riva's production trace parser."
     echo ""
-    
+
     if [[ ! -f "$ARTIFACT_PATH" ]]; then
         echo -e "${RED}× Error: Artifact not found at $ARTIFACT_PATH${RESET}"
         exit 1
