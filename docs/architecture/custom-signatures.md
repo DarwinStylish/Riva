@@ -2,7 +2,6 @@
 
 Riva's diagnostic pipeline is extensible. Developers can write custom signatures to detect game-specific performance stalls (e.g. Niagara particle system compilation, Chaos physics bottlenecks, or World Partitioning cell loading).
 
----
 
 ## The `ISignature` Interface
 
@@ -26,7 +25,6 @@ class ISignature {
 }  // namespace riva
 ```
 
----
 
 ## Example: Custom Physics Spike Signature
 
@@ -97,7 +95,6 @@ class PhysicsSpikeSignature final : public ISignature {
 }  // namespace riva
 ```
 
----
 
 ## Registering Custom Signatures
 
