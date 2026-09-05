@@ -4,7 +4,30 @@ All notable changes to **Riva** will be documented in this file.
 
 The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
----
+
+## [Unreleased]
+
+### Fixed
+
+- Reworked the Unreal plugin as explicit `RivaCore` and `RivaEditor` modules with cross-module API exports and module registration.
+- Updated the editor service to use the current JSON loader and finding model.
+- Replaced empty-session `.utrace` handling with real TraceServices file analysis and frame/timing-provider normalization.
+- Made project budgets optional and resolved them from `Config/RivaBudget.json`.
+- Made asynchronous panel completion lifetime-safe, rejected stale background results, and invalidated stale export state when another trace is opened.
+- Added safe integer-boundary handling, non-finite telemetry rejection, zero-baseline comparison semantics, and explicit `N/A` scoring for unavailable telemetry.
+- Added JSON input-size and nesting limits, Unicode escape decoding, control-character-safe report serialization, and synthetic-fixture validation.
+- Made the fuzz replay workflow fail closed unless a non-zero replay includes a recognized sanitizer diagnostic.
+- Restored deterministic CTest working directories and added process-level CLI gate tests.
+
+### Added
+
+- Added CMake release, debug, and sanitizer presets; warnings-as-errors builds; install rules; and cross-platform CI artifacts.
+- Added a checksum-backed verification evidence collector and worked reviewer examples.
+
+### Removed
+
+- Removed the text file that was incorrectly presented as a binary `.utrace` recording.
+- Removed the logging-only Unreal Insights selection-sync prototype and its UI claims.
 
 ## [0.2.0] - 2026-08-11
 
@@ -32,7 +55,6 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 - Unused `third_party/rapidjson/` dependency.
 
----
 
 ## [0.1.0] - 2026-07-27
 
@@ -41,7 +63,7 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - **Core Diagnostics Engine**:
   - Implemented `RollingMedianSpikeDetector` for frame spike window detection.
   - Added built-in signatures for Garbage Collection (`STUT_GC`), Shader Compilation (`STUT_SHADER_COMPILE`), PSO Misses (`STUT_PSO_MISS`), Asset Streaming IO (`STUT_STREAMING_IO`), Game Thread CPU spikes (`STUT_CPU_GT`), Render Thread CPU spikes (`STUT_CPU_RT`), RHI Sync waits (`STUT_RHI_SYNC`), and Lumen/VSM GPU variance (`STUT_GPU_VARIANCE_LUMEN_VSM`).
-  - Added `CausalChainResolver` for linking root causes and demoting symptomatic downstream stalls.
+  - Added `CausalChainResolver` for linking likely-cause candidates with concurrent symptoms and adjusting their diagnostic rank.
   - Added `ConfidenceResolver` for calibrated finding scoring.
   - Added `CorrelationResolver` for multi-spike clustering of repetitive findings.
 
@@ -64,7 +86,7 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   - Added native Slate panel `SRivaPanel` with dockable tab spawner (`RivaEditorTab`).
   - Added `FRivaTraceService` supporting `.utrace` (Unreal Insights TraceServices) and `.json` trace ingestion.
   - Added non-blocking async analysis execution on Unreal's background thread pool.
-  - Added bidirectional Unreal Insights selection synchronization.
+  - Added an experimental selection callback prototype. This was removed before the next release because it did not integrate with a real Unreal Insights timing view.
   - Added clipboard copy actions (`Copy Summary`, `Copy Time Window`) and native OS save file dialogs for Markdown and JSON exports.
 
 - **Test Suite**:
